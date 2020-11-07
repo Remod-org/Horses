@@ -140,7 +140,7 @@ namespace Oxide.Plugins
         {
             if (!iplayer.HasPermission(permSpawn_Use)) { Message(iplayer, "notauthorized"); return; }
 
-            if(CheckLimit(Convert.ToUInt64(iplayer.Id)))
+            if(HandleLimit(Convert.ToUInt64(iplayer.Id)))
             {
                 if (iplayer.HasPermission(permVIP))
                 {
@@ -215,7 +215,7 @@ namespace Oxide.Plugins
                 {
                     found = true;
                     ulong userid = (iplayer.Object as BasePlayer).userID;
-                    if (CheckLimit(userid))
+                    if (HandleLimit(userid))
                     {
                         if (iplayer.HasPermission(permVIP))
                         {
@@ -290,7 +290,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region helpers
-        private bool CheckLimit(ulong userid)
+        private bool HandleLimit(ulong userid)
         {
             if(configData.Options.EnableLimit)
             {
