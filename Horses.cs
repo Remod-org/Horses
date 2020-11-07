@@ -9,7 +9,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.3", ResourceId = 1160)]
+    [Info("Horses", "RFC1920", "1.0.4", ResourceId = 1160)]
     [Description("Manage horse ownership and access")]
 
     class Horses : RustPlugin
@@ -86,6 +86,22 @@ namespace Oxide.Plugins
             Puts("Mounting blocked.");
 #endif
             return true;
+        }
+
+        private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        {
+            if (entity == null) return;
+            if (entity is RidableHorse)
+            {
+#if DEBUG
+                Puts($"DeadHorse: {entity.net.ID} owned by {entity.OwnerID}");
+#endif
+                if (horses.ContainsKey(entity.net.ID))
+                {
+                    horses.Remove(entity.net.ID);
+                    SaveData();
+                }
+            }
         }
 
         private void OnEntityMounted(BaseMountable mountable, BasePlayer player)
@@ -172,7 +188,7 @@ namespace Oxide.Plugins
                     found = true;
                     if (horse.OwnerID == (iplayer.Object as BasePlayer).userID && horses.ContainsKey(horse.net.ID))
                     {
-                        horses.Remove(horse.net.ID);
+//                        horses.Remove(horse.net.ID); // Handled by OnEntityDeath()
                         horse.Hurt(500);
                     }
                     else
