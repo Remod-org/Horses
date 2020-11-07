@@ -1,14 +1,15 @@
-﻿#define DEBUG
+﻿//#define DEBUG
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
 using System.Collections.Generic;
 using UnityEngine;
 using Oxide.Game.Rust;
+using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.2", ResourceId = 1160)]
+    [Info("Horses", "RFC1920", "1.0.3", ResourceId = 1160)]
     [Description("Manage horse ownership and access")]
 
     class Horses : RustPlugin
@@ -18,6 +19,8 @@ namespace Oxide.Plugins
         private static Dictionary<ulong, ulong> horses = new Dictionary<ulong, ulong>();
         private static Dictionary<ulong, HTimer> htimer = new Dictionary<ulong, HTimer>();
         private const string permClaim_Use = "horses.claim";
+        private const string permSpawn_Use = "horses.spawn";
+        private const string permVIP = "horses.vip";
 
         #region Message
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
@@ -34,8 +37,10 @@ namespace Oxide.Plugins
             {
                 ["notauthorized"] = "You are not authorized for this command!",
                 ["horseclaimed"] = "You have claimed this horse!",
+                ["horselimit"] = "You have reached the limit for claiming horses({0})!",
                 ["horsereleased"] = "You have released this horse!",
                 ["yourhorse"] = "You have already claimed this horse!",
+                ["horsespawned"] = "You have spawned a horse!",
                 ["horseowned"] = "Someone else owns this horse!",
                 ["notyourhorse"] = "Someone else owns this horse.  Perhaps no one...",
                 ["nohorses"] = "No rideable horses found."
@@ -49,7 +54,11 @@ namespace Oxide.Plugins
 
             AddCovalenceCommand("hclaim", "CmdClaim");
             AddCovalenceCommand("hrelease", "CmdRelease");
+            AddCovalenceCommand("hspawn", "CmdSpawn");
+            AddCovalenceCommand("hremove", "CmdRemove");
             permission.RegisterPermission(permClaim_Use, this);
+            permission.RegisterPermission(permSpawn_Use, this);
+            permission.RegisterPermission(permVIP, this);
         }
 
         object CanMountEntity(BasePlayer player, RidableHorse mountable)
@@ -110,6 +119,71 @@ namespace Oxide.Plugins
         #endregion
 
         #region commands
+        [Command("hspawn")]
+        private void CmdSpawn(IPlayer iplayer, string command, string[] args)
+        {
+            if (!iplayer.HasPermission(permSpawn_Use)) { Message(iplayer, "notauthorized"); return; }
+
+            if(CheckLimit(Convert.ToUInt64(iplayer.Id)))
+            {
+                if (iplayer.HasPermission(permVIP))
+                {
+                    Message(iplayer, "horselimit", configData.Options.VIPLimit);
+                }
+                else
+                {
+                    Message(iplayer, "horselimit", configData.Options.Limit);
+                }
+                return;
+            }
+
+            var player = iplayer.Object as BasePlayer;
+            string staticprefab = "assets/rust.ai/nextai/testridablehorse.prefab";
+
+            Vector3 spawnpos = player.eyes.position + player.transform.forward * 2f;
+            spawnpos.y = TerrainMeta.HeightMap.GetHeight(spawnpos);
+            Vector3 rot = player.transform.rotation.eulerAngles;
+            rot = new Vector3(rot.x, rot.y + 180, rot.z);
+            var horse = GameManager.server.CreateEntity(staticprefab, spawnpos, Quaternion.Euler(rot), true);
+
+            if (horse)
+            {
+                horse.Spawn();
+                if (iplayer.HasPermission(permClaim_Use))
+                {
+                    CmdClaim(iplayer, "hclaim", null);
+                }
+                Message(iplayer, "horsespawned");
+            }
+        }
+
+        [Command("hremove")]
+        private void CmdRemove(IPlayer iplayer, string command, string[] args)
+        {
+            if (!iplayer.HasPermission(permSpawn_Use)) { Message(iplayer, "notauthorized"); return; }
+
+            List<RidableHorse> hlist = new List<RidableHorse>();
+            Vis.Entities((iplayer.Object as BasePlayer).transform.position, 1f, hlist);
+            bool found = false;
+            foreach(var horse in hlist)
+            {
+                if (horse as RidableHorse)
+                {
+                    found = true;
+                    if (horse.OwnerID == (iplayer.Object as BasePlayer).userID && horses.ContainsKey(horse.net.ID))
+                    {
+                        horses.Remove(horse.net.ID);
+                        horse.Hurt(500);
+                    }
+                    else
+                    {
+                        Message(iplayer, "notyourhorse");
+                    }
+                }
+            }
+            if (!found) Message(iplayer, "nohorses");
+        }
+
         [Command("hclaim")]
         private void CmdClaim(IPlayer iplayer, string command, string[] args)
         {
@@ -124,10 +198,24 @@ namespace Oxide.Plugins
                 if (horse as RidableHorse)
                 {
                     found = true;
+                    ulong userid = (iplayer.Object as BasePlayer).userID;
+                    if (CheckLimit(userid))
+                    {
+                        if (iplayer.HasPermission(permVIP))
+                        {
+                            Message(iplayer, "horselimit", configData.Options.VIPLimit);
+                        }
+                        else
+                        {
+                            Message(iplayer, "horselimit", configData.Options.Limit);
+                        }
+                        return;
+                    }
+
                     if (horse.OwnerID == 0)
                     {
                         ulong horseid = (horse as BaseMountable).net.ID;
-                        horse.OwnerID = (iplayer.Object as BasePlayer).userID;
+                        horse.OwnerID = userid;
                         horses.Remove(horseid);
                         horses.Add(horseid, horse.OwnerID);
                         SaveData();
@@ -186,6 +274,29 @@ namespace Oxide.Plugins
         #endregion
 
         #region helpers
+        private bool CheckLimit(ulong userid)
+        {
+            if(configData.Options.EnableLimit)
+            {
+                float amt = 0f;
+                foreach(var horse in horses)
+                {
+                    if(horse.Value == userid)
+                    {
+                        amt++;
+                    }
+                }
+                if (amt >= configData.Options.VIPLimit && permission.UserHasPermission(userid.ToString(), permVIP))
+                {
+                    return true;
+                }
+                if (amt >= configData.Options.Limit)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
         private void HandleTimer(ulong horseid, ulong userid, bool start=false)
         {
             if(htimer.ContainsKey(horseid))
@@ -329,7 +440,10 @@ namespace Oxide.Plugins
             public bool ReleaseOwnerOnHorse = false;
             public bool RestrictMounting = false;
             public bool EnableTimer = false;
+            public bool EnableLimit = true;
             public float ReleaseTime = 600f;
+            public float Limit = 2f;
+            public float VIPLimit = 5f;
         }
 
         public class HTimer
