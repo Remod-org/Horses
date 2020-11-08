@@ -9,7 +9,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.4", ResourceId = 1160)]
+    [Info("Horses", "RFC1920", "1.0.5", ResourceId = 1160)]
     [Description("Manage horse ownership and access")]
 
     class Horses : RustPlugin
@@ -59,6 +59,24 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permClaim_Use, this);
             permission.RegisterPermission(permSpawn_Use, this);
             permission.RegisterPermission(permVIP, this);
+        }
+
+        private void OnServerShutdown()
+        {
+            if(configData.Options.EnableTimer)
+            {
+                // Prevent horse ownership from persisting across reboots if the timeout timer was enabled
+                foreach(var data in horses)
+                {
+                    var horse = BaseNetworkable.serverEntities.Find((uint)data.Key);
+                    if(horse != null)
+                    {
+                        (horse as BaseEntity).OwnerID = 0;
+                    }
+                }
+                horses = new Dictionary<ulong, ulong>();
+                SaveData();
+            }
         }
 
         object CanMountEntity(BasePlayer player, RidableHorse mountable)
