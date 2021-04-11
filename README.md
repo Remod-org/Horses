@@ -49,6 +49,7 @@ Limits may be set for standard and VIP users.
 
 - `horses.claim` -- Allows player claim and release horses.
 - `horses.spawn` -- Allows player to spawn or remove a horse.
+- `horses.find` -- Allows player to show the location of their nearest claimed horse.
 - `horses.vip` -- Gives player vip limits when limit is in use.
 
 ## Commands
@@ -57,4 +58,5 @@ Limits may be set for standard and VIP users.
 - `/hrelease` - Release ownership of the horse you're looking at (requires horses.claim permission).
 - `/hspawn` - Spawn a new horse in front of you (requires horses.spawn permission).
 - `/hremove` - Kill the horse in front of you (requires horses.spawn permission and ownership of the horse).  You may then enjoy some delicious horse meat.
+- `/hfind` - Show location of nearest owned horse
 

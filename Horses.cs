@@ -1,4 +1,26 @@
 ﻿//#define DEBUG
+#region License (GPL v3)
+/*
+    Horses
+    Copyright (c) 2020 RFC1920 <desolationoutpostpve@gmail.com>
+
+    This program is free software; you can redistribute it and/or
+    modify it under the terms of the GNU General Public License
+    as published by the Free Software Foundation; either version 2
+    of the License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+    Optionally you can also view the license at <http://www.gnu.org/licenses/>.
+*/
+#endregion
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
@@ -9,18 +31,22 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.5", ResourceId = 1160)]
+    [Info("Horses", "RFC1920", "1.0.6")]
     [Description("Manage horse ownership and access")]
 
     class Horses : RustPlugin
     {
         private ConfigData configData;
-        private readonly Plugin Friends, Clans;
+
+        [PluginReference]
+        private readonly Plugin Friends, Clans, GridAPI;
+
         private static Dictionary<ulong, ulong> horses = new Dictionary<ulong, ulong>();
         private static Dictionary<ulong, HTimer> htimer = new Dictionary<ulong, HTimer>();
         private const string permClaim_Use = "horses.claim";
         private const string permSpawn_Use = "horses.spawn";
-        private const string permVIP = "horses.vip";
+        private const string permFind_Use  = "horses.find";
+        private const string permVIP       = "horses.vip";
 
         #region Message
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
@@ -43,7 +69,8 @@ namespace Oxide.Plugins
                 ["horsespawned"] = "You have spawned a horse!",
                 ["horseowned"] = "Someone else owns this horse!",
                 ["notyourhorse"] = "Someone else owns this horse.  Perhaps no one...",
-                ["nohorses"] = "No rideable horses found."
+                ["nohorses"] = "No rideable horses found.",
+                ["foundhorse"] = "Your horse is {0}m away in {1}."
             }, this);
         }
 
@@ -56,7 +83,9 @@ namespace Oxide.Plugins
             AddCovalenceCommand("hrelease", "CmdRelease");
             AddCovalenceCommand("hspawn", "CmdSpawn");
             AddCovalenceCommand("hremove", "CmdRemove");
+            AddCovalenceCommand("hfind", "CmdFindHorse");
             permission.RegisterPermission(permClaim_Use, this);
+            permission.RegisterPermission(permFind_Use, this);
             permission.RegisterPermission(permSpawn_Use, this);
             permission.RegisterPermission(permVIP, this);
         }
@@ -106,6 +135,11 @@ namespace Oxide.Plugins
             return true;
         }
 
+        private void OnNewSave()
+        {
+            horses = new Dictionary<ulong, ulong>();
+            SaveData();
+        }
         private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
             if (entity == null) return;
@@ -153,6 +187,30 @@ namespace Oxide.Plugins
         #endregion
 
         #region commands
+        [Command("hfind")]
+        private void CmdFindHorse(IPlayer iplayer, string command, string[] args)
+        {
+            if (!iplayer.HasPermission(permFind_Use)) { Message(iplayer, "notauthorized"); return; }
+            bool found = false;
+
+            foreach (var h in horses)
+            {
+                if (h.Value == Convert.ToUInt64(iplayer.Id))
+                {
+                    found = true;
+                    BasePlayer player = iplayer.Object as BasePlayer;
+                    BaseEntity entity = BaseNetworkable.serverEntities.Find((uint)h.Key) as BaseEntity;
+
+                    string hloc = PositionToGrid(entity.transform.position);
+                    string dist = Math.Round(Vector3.Distance(entity.transform.position, player.transform.position)).ToString();
+                    Message(iplayer, "foundhorse", dist, hloc);
+
+                    break;
+                }
+            }
+            if (!found) Message(iplayer, "nohorses");
+        }
+
         [Command("hspawn")]
         private void CmdSpawn(IPlayer iplayer, string command, string[] args)
         {
@@ -188,6 +246,10 @@ namespace Oxide.Plugins
                     CmdClaim(iplayer, "hclaim", null);
                 }
                 Message(iplayer, "horsespawned");
+            }
+            else
+            {
+                horse.Kill();
             }
         }
 
@@ -308,6 +370,24 @@ namespace Oxide.Plugins
         #endregion
 
         #region helpers
+        public string PositionToGrid(Vector3 position)
+        {
+            if (GridAPI != null)
+            {
+                var g = (string[]) GridAPI.CallHook("GetGrid", position);
+                return string.Join("", g);
+            }
+            else
+            {
+                // From GrTeleport
+                var r = new Vector2(World.Size / 2 + position.x, World.Size / 2 + position.z);
+                var x = Mathf.Floor(r.x / 146.3f) % 26;
+                var z = Mathf.Floor(World.Size / 146.3f) - Mathf.Floor(r.y / 146.3f);
+
+                return $"{(char)('A' + x)}{z - 1}";
+            }
+        }
+
         private bool HandleLimit(ulong userid)
         {
             if(configData.Options.EnableLimit)
