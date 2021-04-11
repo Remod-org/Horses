@@ -178,6 +178,7 @@ namespace Oxide.Plugins
                         htimer.Add(horseid, new HTimer() { start = Time.realtimeSinceStartup, countdown = configData.Options.ReleaseTime, userid = player.userID });
                         HandleTimer(horseid, player.userID, true);
                     }
+                    Message(player.IPlayer, "horseclaimed");
 #if DEBUG
                     Puts($"Player {player.userID.ToString()} mounted horse {mountable.net.ID.ToString()} and now owns it.");
 #endif
