@@ -31,7 +31,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.6")]
+    [Info("Horses", "RFC1920", "1.0.7")]
     [Description("Manage horse ownership and access")]
 
     class Horses : RustPlugin
@@ -108,33 +108,6 @@ namespace Oxide.Plugins
             }
         }
 
-        object CanMountEntity(BasePlayer player, RidableHorse mountable)
-        {
-            if (!configData.Options.RestrictMounting) return null;
-            if (player == null) return null;
-            var horse = mountable.GetComponentInParent<RidableHorse>() ?? null;
-            if (horse != null)
-            {
-#if DEBUG
-                Puts($"Player {player.userID.ToString()} wants to mount horse {mountable.net.ID.ToString()}");
-#endif
-                if (horses.ContainsValue(mountable.net.ID))
-                {
-                    if(horse.OwnerID == player.userID || IsFriend(player.userID, horse.OwnerID))
-                    {
-#if DEBUG
-                        Puts("Mounting allowed.");
-#endif
-                        return null;
-                    }
-                }
-            }
-#if DEBUG
-            Puts("Mounting blocked.");
-#endif
-            return true;
-        }
-
         private void OnNewSave()
         {
             horses = new Dictionary<ulong, ulong>();
@@ -154,6 +127,34 @@ namespace Oxide.Plugins
                     SaveData();
                 }
             }
+        }
+
+        object CanMountEntity(BasePlayer player, RidableHorse mountable)
+        {
+            if (!configData.Options.RestrictMounting) return null;
+            if (player == null) return null;
+            var horse = mountable.GetComponentInParent<RidableHorse>() ?? null;
+            if (horse != null)
+            {
+#if DEBUG
+                Puts($"Player {player.userID.ToString()} wants to mount horse {mountable.net.ID.ToString()}");
+#endif
+                if (horses.ContainsValue(mountable.net.ID))
+                {
+                    if (horse.OwnerID == player.userID || IsFriend(player.userID, horse.OwnerID))
+                    {
+#if DEBUG
+                        Puts("Mounting allowed.");
+#endif
+                        return null;
+                    }
+#if DEBUG
+                    Puts("Mounting blocked.");
+#endif
+                }
+            }
+
+            return null;
         }
 
         private void OnEntityMounted(BaseMountable mountable, BasePlayer player)
