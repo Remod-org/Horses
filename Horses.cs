@@ -31,7 +31,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.7")]
+    [Info("Horses", "RFC1920", "1.0.8")]
     [Description("Manage horse ownership and access")]
 
     class Horses : RustPlugin
@@ -41,6 +41,7 @@ namespace Oxide.Plugins
         [PluginReference]
         private readonly Plugin Friends, Clans, GridAPI;
 
+        // horseid, playerid
         private static Dictionary<ulong, ulong> horses = new Dictionary<ulong, ulong>();
         private static Dictionary<ulong, HTimer> htimer = new Dictionary<ulong, HTimer>();
         private const string permClaim_Use = "horses.claim";
@@ -98,7 +99,7 @@ namespace Oxide.Plugins
                 foreach(var data in horses)
                 {
                     var horse = BaseNetworkable.serverEntities.Find((uint)data.Key);
-                    if(horse != null)
+                    if (horse != null)
                     {
                         (horse as BaseEntity).OwnerID = 0;
                     }
@@ -139,7 +140,7 @@ namespace Oxide.Plugins
 #if DEBUG
                 Puts($"Player {player.userID.ToString()} wants to mount horse {mountable.net.ID.ToString()}");
 #endif
-                if (horses.ContainsValue(mountable.net.ID))
+                if (horses.ContainsKey(mountable.net.ID))
                 {
                     if (horse.OwnerID == player.userID || IsFriend(player.userID, horse.OwnerID))
                     {
