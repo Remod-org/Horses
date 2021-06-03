@@ -1,8 +1,7 @@
-﻿//#define DEBUG
-#region License (GPL v3)
+﻿#region License (GPL v3)
 /*
     Horses
-    Copyright (c) 2020 RFC1920 <desolationoutpostpve@gmail.com>
+    Copyright (c) 2021 RFC1920 <desolationoutpostpve@gmail.com>
 
     This program is free software; you can redistribute it and/or
     modify it under the terms of the GNU General Public License
@@ -31,7 +30,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.8")]
+    [Info("Horses", "RFC1920", "1.0.9")]
     [Description("Manage horse ownership and access")]
 
     class Horses : RustPlugin
@@ -114,14 +113,13 @@ namespace Oxide.Plugins
             horses = new Dictionary<ulong, ulong>();
             SaveData();
         }
+
         private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
             if (entity == null) return;
             if (entity is RidableHorse)
             {
-#if DEBUG
-                Puts($"DeadHorse: {entity.net.ID} owned by {entity.OwnerID}");
-#endif
+                if (configData.Options.debug) Puts($"DeadHorse: {entity.net.ID} owned by {entity.OwnerID}");
                 if (horses.ContainsKey(entity.net.ID))
                 {
                     horses.Remove(entity.net.ID);
@@ -137,21 +135,15 @@ namespace Oxide.Plugins
             var horse = mountable.GetComponentInParent<RidableHorse>() ?? null;
             if (horse != null)
             {
-#if DEBUG
-                Puts($"Player {player.userID.ToString()} wants to mount horse {mountable.net.ID.ToString()}");
-#endif
+                if (configData.Options.debug) Puts($"Player {player.userID.ToString()} wants to mount horse {mountable.net.ID.ToString()}");
                 if (horses.ContainsKey(mountable.net.ID))
                 {
                     if (horse.OwnerID == player.userID || IsFriend(player.userID, horse.OwnerID))
                     {
-#if DEBUG
-                        Puts("Mounting allowed.");
-#endif
+                        if (configData.Options.debug) Puts("Mounting allowed.");
                         return null;
                     }
-#if DEBUG
-                    Puts("Mounting blocked.");
-#endif
+                    if (configData.Options.debug) Puts("Mounting blocked.");
                 }
             }
 
@@ -181,9 +173,7 @@ namespace Oxide.Plugins
                         HandleTimer(horseid, player.userID, true);
                     }
                     Message(player.IPlayer, "horseclaimed");
-#if DEBUG
-                    Puts($"Player {player.userID.ToString()} mounted horse {mountable.net.ID.ToString()} and now owns it.");
-#endif
+                    if (configData.Options.debug) Puts($"Player {player.userID.ToString()} mounted horse {mountable.net.ID.ToString()} and now owns it.");
                 }
             }
         }
@@ -421,9 +411,7 @@ namespace Oxide.Plugins
                 if(start)
                 {
                     htimer[horseid].timer = timer.Once(htimer[horseid].countdown, () => { HandleTimer(horseid, userid, false); });
-#if DEBUG
-                    Puts($"Started release timer for horse {horseid.ToString()} owned by {userid.ToString()}");
-#endif
+                    if (configData.Options.debug) Puts($"Started release timer for horse {horseid.ToString()} owned by {userid.ToString()}");
                 }
                 else
                 {
@@ -444,9 +432,7 @@ namespace Oxide.Plugins
                             // Player is on this horse and we allow ownership to be removed while on the horse
                             mounted.OwnerID = 0;
                             horses.Remove(horseid);
-#if DEBUG
-                            Puts($"Released horse {horseid.ToString()} owned by {userid.ToString()}");
-#endif
+                            if (configData.Options.debug) Puts($"Released horse {horseid.ToString()} owned by {userid.ToString()}");
                         }
                         else if (mounted.net.ID == horseid && !configData.Options.ReleaseOwnerOnHorse)
                         {
@@ -454,18 +440,14 @@ namespace Oxide.Plugins
                             // Reset the timer...
                             htimer.Add(horseid, new HTimer() { start = Time.realtimeSinceStartup, countdown = configData.Options.ReleaseTime, userid = userid });
                             htimer[horseid].timer = timer.Once(configData.Options.ReleaseTime, () => { HandleTimer(horseid, userid); });
-#if DEBUG
-                            Puts($"Reset ownership timer for horse {horseid.ToString()} owned by {userid.ToString()}");
-#endif
+                            if (configData.Options.debug) Puts($"Reset ownership timer for horse {horseid.ToString()} owned by {userid.ToString()}");
                         }
                         else
                         {
                             // Player is NOT mounted on this horse...
                             (horse as BaseEntity).OwnerID = 0;
                             horses.Remove(horseid);
-#if DEBUG
-                            Puts($"Released horse {horseid.ToString()} owned by {userid}");
-#endif
+                            if (configData.Options.debug) Puts($"Released horse {horseid.ToString()} owned by {userid}");
                         }
                         SaveData();
                     }
@@ -475,9 +457,7 @@ namespace Oxide.Plugins
                         (horse as BaseEntity).OwnerID = 0;
                         horses.Remove(horseid);
                         SaveData();
-#if DEBUG
-                        Puts($"Released horse {horseid.ToString()} owned by {userid}");
-#endif
+                        if (configData.Options.debug) Puts($"Released horse {horseid.ToString()} owned by {userid}");
                     }
                 }
             }
@@ -508,7 +488,7 @@ namespace Oxide.Plugins
                 BasePlayer player = BasePlayer.FindByID(playerid);
                 if(player.currentTeam != 0)
                 {
-                    RelationshipManager.PlayerTeam playerTeam = RelationshipManager.Instance.FindTeam(player.currentTeam);
+                    RelationshipManager.PlayerTeam playerTeam = RelationshipManager.ServerInstance.FindTeam(player.currentTeam);
                     if(playerTeam == null) return false;
                     if(playerTeam.members.Contains(ownerid))
                     {
@@ -533,7 +513,7 @@ namespace Oxide.Plugins
             Puts("Creating new config file.");
             var config = new ConfigData
             {
-                Version = Version,
+                Version = Version
             };
             SaveConfig(config);
         }
@@ -553,6 +533,7 @@ namespace Oxide.Plugins
             public bool useClans = false;
             public bool useFriends = false;
             public bool useTeams = false;
+            public bool debug = false;
             public bool SetOwnerOnFirstMount = true;
             public bool ReleaseOwnerOnHorse = false;
             public bool RestrictMounting = false;
