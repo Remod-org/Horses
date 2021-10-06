@@ -30,7 +30,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.9")]
+    [Info("Horses", "RFC1920", "1.0.10")]
     [Description("Manage horse ownership and access")]
 
     class Horses : RustPlugin
@@ -112,6 +112,28 @@ namespace Oxide.Plugins
         {
             horses = new Dictionary<ulong, ulong>();
             SaveData();
+        }
+
+        object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
+        {
+            if (entity == null) return null;
+            if (entity is RidableHorse)
+            {
+                if (horses.ContainsKey(entity.net.ID))
+                {
+                    if (configData.Options.debug) Puts($"Horse: {entity.net.ID} owned by {entity.OwnerID} is being attacked!");
+                    if (configData.Options.AlertWhenAttacked)
+                    {
+                        var horse = entity as RidableHorse;
+                        if (horse.mountPoints[0].mountable.GetMounted() == null)
+                        {
+                            InputMessage message = new InputMessage() { buttons = 64 };
+                            horse.RiderInput(new InputState() { current = message }, null);
+                        }
+                    }
+                }
+            }
+            return null;
         }
 
         private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
@@ -537,6 +559,7 @@ namespace Oxide.Plugins
             public bool SetOwnerOnFirstMount = true;
             public bool ReleaseOwnerOnHorse = false;
             public bool RestrictMounting = false;
+            public bool AlertWhenAttacked = false;
             public bool EnableTimer = false;
             public bool EnableLimit = true;
             public float ReleaseTime = 600f;
