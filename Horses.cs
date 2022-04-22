@@ -30,7 +30,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.12")]
+    [Info("Horses", "RFC1920", "1.0.13")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -441,8 +441,28 @@ namespace Oxide.Plugins
             if (configData.Options.debug) Interface.Oxide.LogInfo(message);
         }
 
+        private void PurgeInvalid()
+        {
+            bool found = false;
+            List<ulong> toremove = new List<ulong>();
+            foreach (ulong horse in horses.Keys)
+            {
+                if (BaseNetworkable.serverEntities.Find((uint)horse) == null)
+                {
+                    toremove.Add(horse);
+                    found = true;
+                }
+            }
+            foreach (ulong horse in toremove)
+            {
+                horses.Remove(horse);
+            }
+            if (found) SaveData();
+        }
+
         private bool IsAtLimit(ulong userid)
         {
+            PurgeInvalid();
             if (configData.Options.EnableLimit)
             {
                 DoLog($"Checking horse limit for {userid.ToString()}");
@@ -451,15 +471,17 @@ namespace Oxide.Plugins
                 {
                     if (horse.Value == userid)
                     {
+                        DoLog($"Found matching userid {horse.Value.ToString()}");
                         amt++;
                     }
                 }
-                if (amt >= configData.Options.VIPLimit && permission.UserHasPermission(userid.ToString(), permVIP))
+                DoLog($"Player has {amt.ToString()} horses");
+                if (amt > 0 && amt >= configData.Options.VIPLimit && permission.UserHasPermission(userid.ToString(), permVIP))
                 {
                     DoLog($"VIP player has met or exceeded the limit of {configData.Options.VIPLimit.ToString()}");
                     return true;
                 }
-                if (amt >= configData.Options.Limit)
+                if (amt > 0 && amt >= configData.Options.Limit)
                 {
                     DoLog($"Non-vip player has met or exceeded the limit of {configData.Options.Limit.ToString()}");
                     return true;
