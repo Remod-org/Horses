@@ -151,7 +151,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private object CanMountEntity(BasePlayer player, RidableHorse mountable)
+        private object CanMountEntity(BasePlayer player, BaseMountable mountable)
         {
             if (!configData.Options.RestrictMounting) return null;
             if (player == null) return null;
@@ -159,7 +159,7 @@ namespace Oxide.Plugins
             if (horse != null)
             {
                 if (configData.Options.debug) Puts($"Player {player.userID.ToString()} wants to mount horse {mountable.net.ID.ToString()}");
-                if (horses.ContainsKey(mountable.net.ID))
+                if (horses.ContainsKey(horse.net.ID))
                 {
                     if (horse.OwnerID == player.userID || IsFriend(player.userID, horse.OwnerID))
                     {
