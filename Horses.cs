@@ -30,7 +30,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.13")]
+    [Info("Horses", "RFC1920", "1.0.14")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
