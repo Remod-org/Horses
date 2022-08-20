@@ -30,7 +30,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.14")]
+    [Info("Horses", "RFC1920", "1.0.15")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -198,7 +198,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                if (!horses.ContainsKey(mountable.net.ID))
+                if (!horses.ContainsKey(horse.net.ID))
                 {
                     horse.OwnerID = player.userID;
 
