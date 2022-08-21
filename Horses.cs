@@ -30,7 +30,7 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.15")]
+    [Info("Horses", "RFC1920", "1.0.16")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -40,7 +40,6 @@ namespace Oxide.Plugins
         [PluginReference]
         private readonly Plugin Friends, Clans, GridAPI;
 
-        // horseid, playerid
         private static Dictionary<ulong, ulong> horses = new Dictionary<ulong, ulong>();
         private static Dictionary<ulong, HTimer> htimer = new Dictionary<ulong, HTimer>();
         private const string permClaim_Use = "horses.claim";
@@ -151,6 +150,26 @@ namespace Oxide.Plugins
             }
         }
 
+        private object CanLootEntity(BasePlayer player, RidableHorse horse)
+        {
+            if (!configData.Options.RestrictStorage) return null;
+            if (player == null) return null;
+
+            if (horse != null && horses.ContainsKey(horse.net.ID))
+            {
+                if (IsFriend(player.userID, horse.OwnerID))
+                {
+                    if (configData.Options.debug) Puts("Horse storage access allowed.");
+                    return null;
+                }
+                Message(player.IPlayer, "horseowned");
+                if (configData.Options.debug) Puts("Horse storage access blocked.");
+                return true;
+            }
+
+            return null;
+        }
+
         private object CanMountEntity(BasePlayer player, BaseMountable mountable)
         {
             if (!configData.Options.RestrictMounting) return null;
@@ -161,7 +180,7 @@ namespace Oxide.Plugins
                 if (configData.Options.debug) Puts($"Player {player.userID.ToString()} wants to mount horse {mountable.net.ID.ToString()}");
                 if (horses.ContainsKey(horse.net.ID))
                 {
-                    if (horse.OwnerID == player.userID || IsFriend(player.userID, horse.OwnerID))
+                    if (IsFriend(player.userID, horse.OwnerID))
                     {
                         if (configData.Options.debug) Puts("Mounting allowed.");
                         return null;
@@ -557,6 +576,7 @@ namespace Oxide.Plugins
         // playerid = active player, ownerid = owner of camera, who may be offline
         private bool IsFriend(ulong playerid, ulong ownerid)
         {
+            if (ownerid == playerid) return true;
             if (configData.Options.useFriends && Friends != null)
             {
                 object fr = Friends?.CallHook("AreFriends", playerid, ownerid);
@@ -614,6 +634,7 @@ namespace Oxide.Plugins
                     SetOwnerOnFirstMount = true,
                     ReleaseOwnerOnHorse = false,
                     RestrictMounting = false,
+                    RestrictStorage = false,
                     AlertWhenAttacked = false,
                     EnableTimer = false,
                     EnableLimit = true,
@@ -646,6 +667,7 @@ namespace Oxide.Plugins
             public bool SetOwnerOnFirstMount;
             public bool ReleaseOwnerOnHorse;
             public bool RestrictMounting;
+            public bool RestrictStorage;
             public bool AlertWhenAttacked;
             public bool EnableTimer;
             public bool EnableLimit;
