@@ -1,12 +1,10 @@
-#region License (GPL v3)
+#region License (GPL v2)
 /*
     Horses
-    Copyright (c) 2021 RFC1920 <desolationoutpostpve@gmail.com>
+    Copyright (c) 2022 RFC1920 <desolationoutpostpve@gmail.com>
 
     This program is free software; you can redistribute it and/or
-    modify it under the terms of the GNU General Public License
-    as published by the Free Software Foundation; either version 2
-    of the License, or (at your option) any later version.
+    modify it under the terms of the GNU General Public License v2.0.
 
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -27,10 +25,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Oxide.Game.Rust;
 using System;
+using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.16")]
+    [Info("Horses", "RFC1920", "1.0.17")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -65,6 +64,7 @@ namespace Oxide.Plugins
                 ["horselimit"] = "You have reached the limit for claiming horses({0})!",
                 ["horsereleased"] = "You have released this horse!",
                 ["yourhorse"] = "You have already claimed this horse!",
+                ["yourhorse2"] = "Well, hello there.",
                 ["horsespawned"] = "You have spawned a horse!",
                 ["horseowned"] = "Someone else owns this horse!",
                 ["notyourhorse"] = "Someone else owns this horse.  Perhaps no one...",
@@ -114,39 +114,75 @@ namespace Oxide.Plugins
             SaveData();
         }
 
-        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitInfo)
+        private object OnEntityTakeDamage(RidableHorse horse, HitInfo hitInfo)
         {
-            if (entity == null) return null;
-            if (entity is RidableHorse)
+            if (horse == null) return null;
+            if (hitInfo == null) return null;
+            DamageType majority = hitInfo.damageTypes.GetMajorityDamageType();
+            if (horses.ContainsKey(horse.net.ID))
             {
-                if (horses.ContainsKey(entity.net.ID))
+                if (horse.InSafeZone()) return true;
+
+                if (majority == DamageType.Decay)
                 {
-                    if (configData.Options.debug) Puts($"Horse: {entity.net.ID} owned by {entity.OwnerID} is being attacked!");
-                    if (configData.Options.AlertWhenAttacked)
+                    if (configData.Options.AllowDecay) return null;
+                    DoLog($"[{Name}] Blocking decay damage.");
+                    return true;
+                }
+
+                DoLog($"[{Name}] {horse.net.ID} owned by {horse.OwnerID} is being attacked!");
+
+                if (configData.Options.AlertWhenAttacked && horse.mountPoints[0].mountable.GetMounted() == null)
+                {
+                    // Horse visibly and audibly alerts
+                    InputMessage message = new InputMessage() { buttons = 64 };
+                    horse.RiderInput(new InputState() { current = message }, null);
+                }
+
+                if (!configData.Options.AllowDamage)
+                {
+                    DoLog($"[{Name}] {horse.net.ID} damaged blocked");
+                    return true;
+                }
+
+                if (configData.Options.TCPreventDamage)
+                {
+                    BuildingPrivlidge tc = horse.GetBuildingPrivilege();
+                    if (tc != null)
                     {
-                        RidableHorse horse = entity as RidableHorse;
-                        if (horse.mountPoints[0].mountable.GetMounted() == null)
+                        if (configData.Options.TCMustBeAuthorized)
                         {
-                            InputMessage message = new InputMessage() { buttons = 64 };
-                            horse.RiderInput(new InputState() { current = message }, null);
+                            // Verify horse owner is registered to the TC
+                            foreach (ProtoBuf.PlayerNameID p in tc.authorizedPlayers.ToArray())
+                            {
+                                if (p.userid == horse.OwnerID)
+                                {
+                                    // Horse owner is registered to the TC, block damage.
+                                    DoLog($"[{Name}] {horse.net.ID} owned by {horse.OwnerID} protected by local TC to which the owner is registered.");
+                                    return true;
+                                }
+                            }
+                            // Horse owner is NOT registered to the TC, allow damage.
+                            DoLog($"[{Name}] {horse.net.ID} owned by {horse.OwnerID} NOT protected by local TC since the owner is not registered.");
+                            return null;
                         }
+                        // No local auth required, block damage since we are in BP
+                        DoLog($"[{Name}] {horse.net.ID} owned by {horse.OwnerID} protected by local TC.");
+                        return true;
                     }
                 }
             }
             return null;
         }
 
-        private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        private void OnEntityDeath(RidableHorse entity, HitInfo info)
         {
             if (entity == null) return;
-            if (entity is RidableHorse)
+            if (horses.ContainsKey(entity.net.ID))
             {
-                if (configData.Options.debug) Puts($"DeadHorse: {entity.net.ID} owned by {entity.OwnerID}");
-                if (horses.ContainsKey(entity.net.ID))
-                {
-                    horses.Remove(entity.net.ID);
-                    SaveData();
-                }
+                DoLog($"[{Name}] DeadHorse: {entity.net.ID} owned by {entity.OwnerID}");
+                horses.Remove(entity.net.ID);
+                SaveData();
             }
         }
 
@@ -159,14 +195,32 @@ namespace Oxide.Plugins
             {
                 if (IsFriend(player.userID, horse.OwnerID))
                 {
-                    if (configData.Options.debug) Puts("Horse storage access allowed.");
+                    DoLog("Horse storage access allowed.");
                     return null;
                 }
                 Message(player.IPlayer, "horseowned");
-                if (configData.Options.debug) Puts("Horse storage access blocked.");
+                DoLog("Horse storage access blocked.");
                 return true;
             }
 
+            return null;
+        }
+
+        private object OnHorseLead(RidableHorse horse, BasePlayer player)
+        {
+            DoLog("Horse lead");
+            if (horse != null && horses.ContainsKey(horse.net.ID))
+            {
+                if (configData.Options.AllowLeadByAnyone) return null;
+                if (IsFriend(player.userID, horse.OwnerID))
+                {
+                    DoLog("Horse lead allowed.");
+                    return null;
+                }
+                Message(player.IPlayer, "horseowned");
+                DoLog("Horse lead blocked.");
+                return true;
+            }
             return null;
         }
 
@@ -177,16 +231,16 @@ namespace Oxide.Plugins
             RidableHorse horse = mountable.GetComponentInParent<RidableHorse>();
             if (horse != null)
             {
-                if (configData.Options.debug) Puts($"Player {player.userID.ToString()} wants to mount horse {mountable.net.ID.ToString()}");
+                DoLog($"Player {player.userID} wants to mount horse {mountable.net.ID}");
                 if (horses.ContainsKey(horse.net.ID))
                 {
                     if (IsFriend(player.userID, horse.OwnerID))
                     {
-                        if (configData.Options.debug) Puts("Mounting allowed.");
+                        DoLog("Mounting allowed.");
                         return null;
                     }
                     Message(player.IPlayer, "horseowned");
-                    if (configData.Options.debug) Puts("Mounting blocked.");
+                    DoLog("Mounting blocked.");
                     return true;
                 }
             }
@@ -231,11 +285,11 @@ namespace Oxide.Plugins
                         HandleTimer(horseid, player.userID, true);
                     }
                     Message(player.IPlayer, "horseclaimed");
-                    if (configData.Options.debug) Puts($"Player {player.userID.ToString()} mounted horse {mountable.net.ID.ToString()} and now owns it.");
+                    DoLog($"Player {player.userID} mounted horse {mountable.net.ID} and now owns it.");
                 }
                 else if (horse.OwnerID == userid)
                 {
-                    Message(player.IPlayer, "yourhorse");
+                    Message(player.IPlayer, "yourhorse2");
                 }
                 else
                 {
@@ -328,7 +382,6 @@ namespace Oxide.Plugins
                     found = true;
                     if (horse.OwnerID == player.userID && horses.ContainsKey(horse.net.ID))
                     {
-                        //horses.Remove(horse.net.ID); // Handled by OnEntityDeath()
                         horse.Hurt(500);
                     }
                     else
@@ -343,7 +396,6 @@ namespace Oxide.Plugins
         [Command("hclaim")]
         private void CmdClaim(IPlayer iplayer, string command, string[] args)
         {
-            // if (configData.Options.SetOwnerOnFirstMount) return;
             if (!iplayer.HasPermission(permClaim_Use)) { Message(iplayer, "notauthorized"); return; }
 
             BasePlayer player = iplayer.Object as BasePlayer;
@@ -484,25 +536,25 @@ namespace Oxide.Plugins
             PurgeInvalid();
             if (configData.Options.EnableLimit)
             {
-                DoLog($"Checking horse limit for {userid.ToString()}");
+                DoLog($"Checking horse limit for {userid}");
                 float amt = 0f;
                 foreach (KeyValuePair<ulong, ulong> horse in horses)
                 {
                     if (horse.Value == userid)
                     {
-                        DoLog($"Found matching userid {horse.Value.ToString()}");
+                        DoLog($"Found matching userid {horse.Value}");
                         amt++;
                     }
                 }
-                DoLog($"Player has {amt.ToString()} horses");
+                DoLog($"Player has {amt} horses");
                 if (amt > 0 && amt >= configData.Options.VIPLimit && permission.UserHasPermission(userid.ToString(), permVIP))
                 {
-                    DoLog($"VIP player has met or exceeded the limit of {configData.Options.VIPLimit.ToString()}");
+                    DoLog($"VIP player has met or exceeded the limit of {configData.Options.VIPLimit}");
                     return true;
                 }
                 if (amt > 0 && amt >= configData.Options.Limit)
                 {
-                    DoLog($"Non-vip player has met or exceeded the limit of {configData.Options.Limit.ToString()}");
+                    DoLog($"Non-vip player has met or exceeded the limit of {configData.Options.Limit}");
                     return true;
                 }
                 DoLog("Player is under the limit.");
@@ -519,7 +571,7 @@ namespace Oxide.Plugins
                 if (start)
                 {
                     htimer[horseid].timer = timer.Once(htimer[horseid].countdown, () => HandleTimer(horseid, userid, false));
-                    if (configData.Options.debug) Puts($"Started release timer for horse {horseid.ToString()} owned by {userid.ToString()}");
+                    DoLog($"Started release timer for horse {horseid} owned by {userid}");
                 }
                 else
                 {
@@ -540,7 +592,7 @@ namespace Oxide.Plugins
                             // Player is on this horse and we allow ownership to be removed while on the horse
                             mounted.OwnerID = 0;
                             horses.Remove(horseid);
-                            if (configData.Options.debug) Puts($"Released horse {horseid.ToString()} owned by {userid.ToString()}");
+                            DoLog($"Released horse {horseid} owned by {userid}");
                         }
                         else if (mounted.net.ID == horseid && !configData.Options.ReleaseOwnerOnHorse)
                         {
@@ -548,7 +600,7 @@ namespace Oxide.Plugins
                             // Reset the timer...
                             htimer.Add(horseid, new HTimer() { start = Time.realtimeSinceStartup, countdown = configData.Options.ReleaseTime, userid = userid });
                             htimer[horseid].timer = timer.Once(configData.Options.ReleaseTime, () => HandleTimer(horseid, userid));
-                            if (configData.Options.debug) Puts($"Reset ownership timer for horse {horseid.ToString()} owned by {userid.ToString()}");
+                            DoLog($"Reset ownership timer for horse {horseid} owned by {userid}");
                         }
                         else
                         {
@@ -556,7 +608,7 @@ namespace Oxide.Plugins
                             BaseEntity bhorse = horse as BaseEntity;
                             bhorse.OwnerID = 0;
                             horses.Remove(horseid);
-                            if (configData.Options.debug) Puts($"Released horse {horseid.ToString()} owned by {userid}");
+                            DoLog($"Released horse {horseid} owned by {userid}");
                         }
                         SaveData();
                     }
@@ -567,13 +619,12 @@ namespace Oxide.Plugins
                         bhorse.OwnerID = 0;
                         horses.Remove(horseid);
                         SaveData();
-                        if (configData.Options.debug) Puts($"Released horse {horseid.ToString()} owned by {userid}");
+                        DoLog($"Released horse {horseid} owned by {userid}");
                     }
                 }
             }
         }
 
-        // playerid = active player, ownerid = owner of camera, who may be offline
         private bool IsFriend(ulong playerid, ulong ownerid)
         {
             if (ownerid == playerid) return true;
@@ -616,6 +667,13 @@ namespace Oxide.Plugins
         {
             configData = Config.ReadObject<ConfigData>();
 
+            if (configData.Version < new VersionNumber(1, 0, 17))
+            {
+                configData.Options.AllowDecay = false;
+                configData.Options.AllowDamage = true;
+                configData.Options.TCPreventDamage = true;
+                configData.Options.TCMustBeAuthorized = true;
+            }
             configData.Version = Version;
             SaveConfig(configData);
         }
@@ -638,6 +696,10 @@ namespace Oxide.Plugins
                     AlertWhenAttacked = false,
                     EnableTimer = false,
                     EnableLimit = true,
+                    AllowDecay = false,
+                    AllowDamage = true,
+                    TCPreventDamage = true,
+                    TCMustBeAuthorized = true,
                     ReleaseTime = 600f,
                     Limit = 2f,
                     VIPLimit = 5f
@@ -671,6 +733,11 @@ namespace Oxide.Plugins
             public bool AlertWhenAttacked;
             public bool EnableTimer;
             public bool EnableLimit;
+            public bool AllowDecay;
+            public bool AllowDamage;
+            public bool TCPreventDamage;
+            public bool TCMustBeAuthorized;
+            public bool AllowLeadByAnyone;
             public float ReleaseTime;
             public float Limit;
             public float VIPLimit;

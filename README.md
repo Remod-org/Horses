@@ -18,19 +18,27 @@ Limits may be set for standard and VIP users.
     "useClans": false,
     "useFriends": false,
     "useTeams": false,
+    "debug": false,
     "SetOwnerOnFirstMount": true,
-    "EnableTimer": false,
-    "ReleaseTime": 600.0,
     "ReleaseOwnerOnHorse": false,
-    "RestrictMounting": false,
+    "RestrictMounting": true,
+    "RestrictStorage": true,
+    "AlertWhenAttacked": false,
+    "EnableTimer": false,
     "EnableLimit": true,
+    "AllowDecay": false,
+    "AllowDamage": true,
+    "TCPreventDamage": true,
+    "TCMustBeAuthorized": true,
+    "AllowLeadByAnyone": false,
+    "ReleaseTime": 600.0,
     "Limit": 2.0,
     "VIPLimit": 5.0
   },
   "Version": {
     "Major": 1,
     "Minor": 0,
-    "Patch": 2
+    "Patch": 17
   }
 }
 ```
@@ -42,6 +50,10 @@ Limits may be set for standard and VIP users.
 - `ReleaseOwnerOnHorse` -- Release ownership of a horse while the owner is mounted after ReleaseTime has been reached.
 - `RestrictMounting` -- Restrict mounting of owned horses to the owner.  If false, you can use other plugins to manage this such as PreventLooting.
 - `EnableLimit` -- Enable limit of total claimed horse count per player.
+- `AllowDecay` -- If true, standard decay will apply to spawned or claimed horses.
+- `AllowDamage` -- If true, allow horse damage from other players, etc.  Note that this may conflict with NextGenPVE, et al, if configured to protect horses.
+- `TCPreventDamage` -- If AllowDamage is true, block damage if in building privilege.  See below...
+- `TCMustBeAuthorized` -- If TCPreventDamage is true, set this true to require that the horse owner be registered on the local TC.  In other words, just being in ANY TC range would NOT prevent damage, so the attacked player can kill the attacker's horse from the comfort of their base, etc.
 - `Limit` -- Limit for users with claim permission.
 - `VIPLimit` -- Limit for users with vip permission.
 
