@@ -9,6 +9,8 @@ Claimed horses can be released via the chat command /hrelease or through the use
 
 Users with permission may also spawn and remove their owned horses.
 
+Purchased horses should also become managed by the plugin.
+
 Limits may be set for standard and VIP users.
 
 ### Configuration
@@ -71,4 +73,5 @@ Limits may be set for standard and VIP users.
 - `/hspawn` - Spawn a new horse in front of you (requires horses.spawn permission).
 - `/hremove` - Kill the horse in front of you (requires horses.spawn permission and ownership of the horse).  You may then enjoy some delicious horse meat.
 - `/hfind` - Show location of nearest owned horse
+- `/hinfo` - Show basic info about a horse (Requires horses.claim permission, but can be used on any horse.)
 
