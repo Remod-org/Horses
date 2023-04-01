@@ -30,7 +30,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.18")]
+    [Info("Horses", "RFC1920", "1.0.19")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -261,21 +261,25 @@ namespace Oxide.Plugins
         {
             if (!configData.Options.RestrictMounting) return null;
             if (player == null) return null;
+            if (mountable == null) return null;
 
             RidableHorse horse = mountable.GetComponentInParent<RidableHorse>();
-            if (horse?.OwnerID == 0) return null;
-
-            if (horse != null && horses.ContainsKey(horse.net.ID))
+            if (horse != null)
             {
-                DoLog($"Player {player.userID} wants to mount horse {horse.net.ID}");
-                if (IsFriend(player.userID, horse.OwnerID))
+                if (horse?.OwnerID == 0) return null;
+
+                if (horses?.Count > 0 && horses.ContainsKey(horse.net.ID))
                 {
-                    DoLog("Mounting allowed.");
-                    return null;
+                    DoLog($"Player {player.userID} wants to mount horse {horse.net.ID}");
+                    if (IsFriend(player.userID, horse.OwnerID))
+                    {
+                        DoLog("Mounting allowed.");
+                        return null;
+                    }
+                    Message(player.IPlayer, "horseowned");
+                    DoLog("Mounting blocked.");
+                    return true;
                 }
-                Message(player.IPlayer, "horseowned");
-                DoLog("Mounting blocked.");
-                return true;
             }
 
             return null;
