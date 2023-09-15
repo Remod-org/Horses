@@ -30,7 +30,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.20")]
+    [Info("Horses", "RFC1920", "1.0.21")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -46,6 +46,7 @@ namespace Oxide.Plugins
         private const string permSpawn_Use = "horses.spawn";
         private const string permFind_Use = "horses.find";
         private const string permVIP = "horses.vip";
+        private bool enabled;
 
         #region Message
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
@@ -82,6 +83,7 @@ namespace Oxide.Plugins
         {
             LoadConfigVariables();
             LoadData();
+            enabled = true;
 
             AddCovalenceCommand("hclaim", "CmdClaim");
             AddCovalenceCommand("hrelease", "CmdRelease");
@@ -132,6 +134,7 @@ namespace Oxide.Plugins
 
         private object OnEntityTakeDamage(RidableHorse horse, HitInfo hitInfo)
         {
+            if (!enabled) return null;
             if (horse == null) return null;
             if (hitInfo == null) return null;
             DamageType majority = hitInfo.damageTypes.GetMajorityDamageType();
@@ -194,6 +197,7 @@ namespace Oxide.Plugins
 
         private void OnEntityDeath(RidableHorse entity, HitInfo info)
         {
+            if (!enabled) return;
             if (entity == null) return;
             if (horses.ContainsKey((uint)entity.net.ID.Value))
             {
@@ -205,6 +209,7 @@ namespace Oxide.Plugins
 
         private object CanLootEntity(BasePlayer player, RidableHorse horse)
         {
+            if (!enabled) return null;
             if (!configData.Options.RestrictStorage) return null;
             if (player == null) return null;
 
@@ -241,6 +246,7 @@ namespace Oxide.Plugins
 
         private object OnHorseLead(BaseRidableAnimal horse, BasePlayer player)
         {
+            if (!enabled) return null;
             DoLog("Horse lead");
             if (horse != null && horses.ContainsKey((uint)horse.net.ID.Value))
             {
@@ -259,6 +265,10 @@ namespace Oxide.Plugins
 
         private object CanMountEntity(BasePlayer player, BaseMountable mountable)
         {
+            if (!enabled) return null;
+            if (player == null) return null;
+            if (mountable == null) return null;
+
             if (!configData.Options.RestrictMounting) return null;
             if (player == null) return null;
             if (mountable == null) return null;
@@ -287,7 +297,9 @@ namespace Oxide.Plugins
 
         private void OnEntityMounted(BaseMountable mountable, BasePlayer player)
         {
+            if (!enabled) return;
             if (player == null) return;
+            if (!player.userID.IsSteamId()) return;
             if (mountable == null) return;
             if (!configData.Options.SetOwnerOnFirstMount) return;
 
