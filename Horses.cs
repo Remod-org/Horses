@@ -30,7 +30,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.21")]
+    [Info("Horses", "RFC1920", "1.0.22")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -44,6 +44,7 @@ namespace Oxide.Plugins
         private static Dictionary<ulong, HTimer> htimer = new Dictionary<ulong, HTimer>();
         private const string permClaim_Use = "horses.claim";
         private const string permSpawn_Use = "horses.spawn";
+        private const string permBreed_Use = "horses.breed";
         private const string permFind_Use = "horses.find";
         private const string permVIP = "horses.vip";
         private bool enabled;
@@ -73,6 +74,10 @@ namespace Oxide.Plugins
                 ["horseinfo"] = "{0}:\n  Health: {1}\n  Stamina: {2}\n  Owner: {3}\n  {4}{5}",
                 ["hitched"] = "Currently hitched",
                 ["forsale"] = "Currently for sale",
+                ["breeds"] = "Breeds:\n{0}",
+                ["invalidbreed"] = "Invalid breed!",
+                ["breed"] = "Current breed is {0}",
+                ["breedchanged"] = "Changed breed from {0} to {1}.",
                 ["notyourhorse"] = "Someone else owns this horse.  Perhaps no one...",
                 ["nohorses"] = "No rideable horses found.",
                 ["foundhorse"] = "Your horse is {0}m away in {1}."
@@ -88,12 +93,14 @@ namespace Oxide.Plugins
             AddCovalenceCommand("hclaim", "CmdClaim");
             AddCovalenceCommand("hrelease", "CmdRelease");
             AddCovalenceCommand("hspawn", "CmdSpawn");
+            AddCovalenceCommand("hbreed", "CmdBreed");
             AddCovalenceCommand("hremove", "CmdRemove");
             AddCovalenceCommand("hfind", "CmdFindHorse");
             AddCovalenceCommand("hinfo", "CmdHorseInfo");
             permission.RegisterPermission(permClaim_Use, this);
             permission.RegisterPermission(permFind_Use, this);
             permission.RegisterPermission(permSpawn_Use, this);
+            permission.RegisterPermission(permBreed_Use, this);
             permission.RegisterPermission(permVIP, this);
 
             // Fix ownership for horses perhaps previously claimed but not current managed.
@@ -457,6 +464,57 @@ namespace Oxide.Plugins
             }
         }
 
+        [Command("hbreed")]
+        private void CmdBreed(IPlayer iplayer, string command, string[] args)
+        {
+            if (!iplayer.HasPermission(permBreed_Use)) { Message(iplayer, "notauthorized"); return; }
+            if (!configData.Options.AllowChangingBreed) return;
+
+            if (args.Length == 0)
+            {
+                string breedNames = string.Empty;
+                for (int i = 0; i < Enum.GetNames(typeof(Breeds)).Length; i++)
+                {
+                    breedNames += "  " + Enum.GetName(typeof(Breeds), i) + "\n";
+                }
+                Message(iplayer, "breeds", breedNames);
+                return;
+            }
+            if (args.Length != 1) return;
+
+            List<RidableHorse> hlist = new List<RidableHorse>();
+            BasePlayer player = iplayer.Object as BasePlayer;
+            Vis.Entities(player.transform.position, 1f, hlist);
+            bool found = false;
+            foreach (RidableHorse horse in hlist)
+            {
+                if (horse)
+                {
+                    found = true;
+                    if (horse.OwnerID == player.userID && horses.ContainsKey((uint)horse.net.ID.Value))
+                    {
+                        string currentBreed = horse.GetBreed().breedName.translated;
+                        Breeds breed;
+                        bool foundBreed = Enum.TryParse(args[0], true, out breed);
+                        Puts(breed.ToString());
+                        if (foundBreed)
+                        {
+                            horse.ApplyBreed((int)breed);
+                            string bname = Enum.GetName(typeof(Breeds), breed);
+                            Message(iplayer, "breedchanged", currentBreed, bname);
+                            return;
+                        }
+                        Message(iplayer, "invalidbreed");
+                    }
+                    else
+                    {
+                        Message(iplayer, "notyourhorse");
+                    }
+                }
+            }
+            if (!found) Message(iplayer, "nohorses");
+        }
+
         [Command("hremove")]
         private void CmdRemove(IPlayer iplayer, string command, string[] args)
         {
@@ -744,6 +802,20 @@ namespace Oxide.Plugins
             }
             return false;
         }
+
+        private enum Breeds
+        {
+            Appaloosa = 0,
+            Bay = 1,
+            Buckskin = 2,
+            Chestnut = 3,
+            Dapple = 4,
+            Piebald = 5,
+            Pinto = 6,
+            Red = 7,
+            White = 8,
+            Black = 9
+        }
         #endregion
 
         #region config
@@ -827,6 +899,7 @@ namespace Oxide.Plugins
             public bool TCPreventDamage;
             public bool TCMustBeAuthorized;
             public bool AllowLeadByAnyone;
+            public bool AllowChangingBreed;
             public float ReleaseTime;
             public float Limit;
             public float VIPLimit;

@@ -33,6 +33,7 @@ Limits may be set for standard and VIP users.
     "TCPreventDamage": true,
     "TCMustBeAuthorized": true,
     "AllowLeadByAnyone": false,
+    "AllowChangingBreed": false,
     "ReleaseTime": 600.0,
     "Limit": 2.0,
     "VIPLimit": 5.0
@@ -63,6 +64,7 @@ Limits may be set for standard and VIP users.
 
 - `horses.claim` -- Allows player claim and release horses.
 - `horses.spawn` -- Allows player to spawn or remove a horse.
+- `horses.breed` -- Allows player to change the breed of their horse (if AllowChangingBreed is true).
 - `horses.find` -- Allows player to show the location of their nearest claimed horse.
 - `horses.vip` -- Gives player vip limits when limit is in use.
 
@@ -74,4 +76,6 @@ Limits may be set for standard and VIP users.
 - `/hremove` - Kill the horse in front of you (requires horses.spawn permission and ownership of the horse).  You may then enjoy some delicious horse meat.
 - `/hfind` - Show location of nearest owned horse
 - `/hinfo` - Show basic info about a horse (Requires horses.claim permission, but can be used on any horse.)
+- `/hbreed` - Without parameters, lists available breeds.
+- `/hbreed BREED` - Set the breed of your horse based on valid names (Run /hbreed without parameters to see a list).
 
