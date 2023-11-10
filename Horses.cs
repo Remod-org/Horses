@@ -496,7 +496,6 @@ namespace Oxide.Plugins
                         string currentBreed = horse.GetBreed().breedName.translated;
                         Breeds breed;
                         bool foundBreed = Enum.TryParse(args[0], true, out breed);
-                        Puts(breed.ToString());
                         if (foundBreed)
                         {
                             horse.ApplyBreed((int)breed);
