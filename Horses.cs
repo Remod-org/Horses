@@ -30,7 +30,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.22")]
+    [Info("Horses", "RFC1920", "1.0.23")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -55,8 +55,8 @@ namespace Oxide.Plugins
         #endregion
 
         #region hooks
-        private void LoadData() => horses = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, ulong>>($"{Name}/ridables");
-        private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject($"{Name}/ridables", horses);
+        private void LoadData() => horses = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, ulong>>($"{Name}/ridables");
+        private void SaveData() => Interface.GetMod().DataFileSystem.WriteObject($"{Name}/ridables", horses);
 
         protected override void LoadDefaultMessages()
         {
@@ -180,7 +180,7 @@ namespace Oxide.Plugins
                         if (configData.Options.TCMustBeAuthorized)
                         {
                             // Verify horse owner is registered to the TC
-                            foreach (ProtoBuf.PlayerNameID p in tc.authorizedPlayers.ToArray())
+                            foreach (ProtoBuf.PlayerNameID p in tc.authorizedPlayers)
                             {
                                 if (p.userid == horse.OwnerID)
                                 {
@@ -655,7 +655,7 @@ namespace Oxide.Plugins
 
         private void DoLog(string message)
         {
-            if (configData.Options.debug) Interface.Oxide.LogInfo($"[{Name}] {message}");
+            if (configData.Options.debug) Interface.GetMod().LogInfo($"[{Name}] {message}");
         }
 
         private void PurgeInvalid()
