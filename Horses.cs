@@ -27,10 +27,11 @@ using UnityEngine;
 using Oxide.Game.Rust;
 using System;
 using Rust;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.23")]
+    [Info("Horses", "RFC1920", "1.0.24")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -180,9 +181,10 @@ namespace Oxide.Plugins
                         if (configData.Options.TCMustBeAuthorized)
                         {
                             // Verify horse owner is registered to the TC
-                            foreach (ProtoBuf.PlayerNameID p in tc.authorizedPlayers)
+                            //foreach (ProtoBuf.PlayerNameID p in tc.authorizedPlayers)
+                            foreach (ulong auth in tc.authorizedPlayers.Select(x => x.userid).ToArray())
                             {
-                                if (p.userid == horse.OwnerID)
+                                if (auth == horse.OwnerID)
                                 {
                                     // Horse owner is registered to the TC, block damage.
                                     DoLog($"{horse.net.ID} owned by {horse.OwnerID} protected by local TC to which the owner is registered.");
