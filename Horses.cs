@@ -20,18 +20,19 @@
 */
 #endregion
 using Oxide.Core;
-using Oxide.Core.Plugins;
 using Oxide.Core.Libraries.Covalence;
-using System.Collections.Generic;
-using UnityEngine;
+using Oxide.Core.Plugins;
 using Oxide.Game.Rust;
-using System;
 using Rust;
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.24")]
+    [Info("Horses", "RFC1920", "1.0.25")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -76,6 +77,13 @@ namespace Oxide.Plugins
                 ["hitched"] = "Currently hitched",
                 ["forsale"] = "Currently for sale",
                 ["breeds"] = "Breeds:\n{0}",
+                ["hclaim"] = "Claim a horse",
+                ["hrelease"] = "Release a horse you own",
+                ["hfind"] = "Locate your horse(s)",
+                ["hinfo"] = "Display info about a horse in your view",
+                ["hspawn"] = "Spawn a horse",
+                ["hremove"] = "Kill your horse",
+                ["hbreed"] = "Change horse's breed",
                 ["invalidbreed"] = "Invalid breed!",
                 ["breed"] = "Current breed is {0}",
                 ["breedchanged"] = "Changed breed from {0} to {1}.",
@@ -625,6 +633,35 @@ namespace Oxide.Plugins
         #endregion
 
         #region helpers
+        [HookMethod("SendHelpText")]
+        private void SendHelpText(BasePlayer player)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("<color=#05eb59>").Append(Name).Append(' ').Append(Version).Append(" - ").Append(Description).Append("</color>\n");
+            if (player.IPlayer.HasPermission(permClaim_Use))
+            {
+                sb.Append("  . ").Append("/hclaim").Append(" - ").Append(Lang("hclaim")).Append("\n");
+                sb.Append("  . ").Append("/hrelease").Append(" - ").Append(Lang("hrelease")).Append("\n");
+                sb.Append("  . ").Append("/hremove").Append(" - ").Append(Lang("hremove")).Append("\n");
+                sb.Append("  . ").Append("/hinfo").Append(" - ").Append(Lang("hinfo")).Append("\n");
+            }
+            else
+            {
+                return;
+            }
+            if (player.IPlayer.HasPermission(permBreed_Use))
+            {
+                sb.Append("  . ").Append("/hbreed").Append(" - ").Append(Lang("hbreed")).Append("\n");
+            }
+            if (player.IPlayer.HasPermission(permSpawn_Use))
+            {
+                sb.Append("  . ").Append("/hspawn").Append(" - ").Append(Lang("hspawn")).Append("\n");
+            }
+
+            player.ChatMessage(sb.ToString());
+        }
+
+
         private static string FindPlayerById(ulong userid)
         {
             foreach (BasePlayer current in BasePlayer.allPlayerList)
