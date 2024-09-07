@@ -22,7 +22,6 @@
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
-using Oxide.Game.Rust;
 using Rust;
 using System;
 using System.Collections.Generic;
@@ -32,7 +31,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.25")]
+    [Info("Horses", "RFC1920", "1.0.26")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -42,7 +41,11 @@ namespace Oxide.Plugins
         [PluginReference]
         private readonly Plugin Friends, Clans, GridAPI;
 
-        private static Dictionary<ulong, ulong> horses = new Dictionary<ulong, ulong>();
+        // Permanent data for player-owned horses
+        private static Dictionary<ulong, List<ulong>> playerhorses = new Dictionary<ulong, List<ulong>>();
+        // Runtime simple list of horses
+        private static List<ulong> horses = new List<ulong>();
+
         private static Dictionary<ulong, HTimer> htimer = new Dictionary<ulong, HTimer>();
         private const string permClaim_Use = "horses.claim";
         private const string permSpawn_Use = "horses.spawn";
@@ -50,6 +53,7 @@ namespace Oxide.Plugins
         private const string permFind_Use = "horses.find";
         private const string permVIP = "horses.vip";
         private bool enabled;
+        private bool do1026;
 
         #region Message
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
@@ -57,8 +61,37 @@ namespace Oxide.Plugins
         #endregion
 
         #region hooks
-        private void LoadData() => horses = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, ulong>>($"{Name}/ridables");
-        private void SaveData() => Interface.GetMod().DataFileSystem.WriteObject($"{Name}/ridables", horses);
+        private void LoadData()
+        {
+            if (do1026)
+            {
+                Dictionary<ulong, ulong> oldh = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, ulong>>($"{Name}/ridables");
+                foreach (KeyValuePair<ulong, ulong> newh in oldh)
+                {
+                    if (!playerhorses.ContainsKey(newh.Value))
+                    {
+                        playerhorses.Add(newh.Value, new List<ulong>());
+                    }
+                    playerhorses[newh.Value].Add(newh.Key);
+                    horses.Add(newh.Key);
+                }
+                SaveData();
+                do1026 = false;
+                return;
+            }
+
+            playerhorses = Interface.GetMod().DataFileSystem.ReadObject<Dictionary<ulong, List<ulong>>>($"{Name}/ridables");
+
+            foreach (KeyValuePair<ulong, List<ulong>> hl in playerhorses)
+            {
+                foreach (ulong h in hl.Value)
+                {
+                    horses.Add(h);
+                }
+            }
+        }
+
+        private void SaveData() => Interface.GetMod().DataFileSystem.WriteObject($"{Name}/ridables", playerhorses);
 
         protected override void LoadDefaultMessages()
         {
@@ -68,6 +101,7 @@ namespace Oxide.Plugins
                 ["horseclaimed"] = "You have claimed this horse!",
                 ["horselimit"] = "You have reached the limit for claiming horses({0})!",
                 ["horsereleased"] = "You have released this horse!",
+                ["horsesreleased"] = "You have released all of your horses!",
                 ["yourhorse"] = "You have already claimed this horse!",
                 ["yourhorse2"] = "Well, hello there.",
                 ["horsespawned"] = "You have spawned a horse!",
@@ -115,7 +149,7 @@ namespace Oxide.Plugins
             // Fix ownership for horses perhaps previously claimed but not current managed.
             foreach (RidableHorse horse in UnityEngine.Object.FindObjectsOfType<RidableHorse>())
             {
-                if (!horses.ContainsKey((uint)horse.net.ID.Value) && horse.OwnerID != 0)
+                if (!horses.Contains(horse.net.ID.Value) && horse.OwnerID != 0)
                 {
                     DoLog($"Setting owner of unmanaged horse {horse.net.ID} back to server.");
                     horse.OwnerID = 0;
@@ -128,7 +162,7 @@ namespace Oxide.Plugins
             if (configData.Options.EnableTimer)
             {
                 // Prevent horse ownership from persisting across reboots if the timeout timer was enabled
-                foreach (KeyValuePair<ulong, ulong> data in horses)
+                foreach (KeyValuePair<ulong, List<ulong>> data in playerhorses)
                 {
                     BaseNetworkable horse = BaseNetworkable.serverEntities.Find(new NetworkableId(data.Key));
                     if (horse != null)
@@ -137,14 +171,14 @@ namespace Oxide.Plugins
                         if (bhorse != null) bhorse.OwnerID = 0;
                     }
                 }
-                horses = new Dictionary<ulong, ulong>();
+                playerhorses = new Dictionary<ulong, List<ulong>>();
                 SaveData();
             }
         }
 
         private void OnNewSave()
         {
-            horses = new Dictionary<ulong, ulong>();
+            playerhorses = new Dictionary<ulong, List<ulong>>();
             SaveData();
         }
 
@@ -154,7 +188,7 @@ namespace Oxide.Plugins
             if (horse == null) return null;
             if (hitInfo == null) return null;
             DamageType majority = hitInfo.damageTypes.GetMajorityDamageType();
-            if (horses.ContainsKey((uint)horse.net.ID.Value))
+            if (horses.Contains(horse.net.ID.Value))
             {
                 if (horse.InSafeZone()) return true;
 
@@ -216,10 +250,15 @@ namespace Oxide.Plugins
         {
             if (!enabled) return;
             if (entity == null) return;
-            if (horses.ContainsKey((uint)entity.net.ID.Value))
+            if (horses.Contains(entity.net.ID.Value))
             {
                 DoLog($"DeadHorse: {entity.net.ID} owned by {entity.OwnerID}");
-                horses.Remove((uint)entity.net.ID.Value);
+                BasePlayer pl = BasePlayer.FindAwakeOrSleeping(entity.OwnerID.ToString());
+                if (pl != null)
+                {
+                    playerhorses[pl.userID].Remove(entity.net.ID.Value);
+                }
+                horses.Remove(entity.net.ID.Value);
                 SaveData();
             }
         }
@@ -230,7 +269,7 @@ namespace Oxide.Plugins
             if (!configData.Options.RestrictStorage) return null;
             if (player == null) return null;
 
-            if (horse != null && horses.ContainsKey((uint)horse.net.ID.Value))
+            if (horse != null && horses.Contains(horse.net.ID.Value))
             {
                 if (IsFriend(player.userID, horse.OwnerID))
                 {
@@ -248,7 +287,7 @@ namespace Oxide.Plugins
         //private object OnHorseHitch(RidableHorse horse, HitchTrough hitch)
         //{
         //    DoLog("Horse hitch");
-        //    if (horse != null && horses.ContainsKey(horse.net.ID))
+        //    if (horse != null && horses.Contains(horse.net.ID))
         //    {
         //        if (IsFriend(hitch.OwnerID, horse.OwnerID))
         //        {
@@ -265,7 +304,7 @@ namespace Oxide.Plugins
         {
             if (!enabled) return null;
             DoLog("Horse lead");
-            if (horse != null && horses.ContainsKey((uint)horse.net.ID.Value))
+            if (horse != null && horses.Contains(horse.net.ID.Value))
             {
                 if (configData.Options.AllowLeadByAnyone) return null;
                 if (IsFriend(player.userID, horse.OwnerID))
@@ -295,7 +334,7 @@ namespace Oxide.Plugins
             {
                 if (horse?.OwnerID == 0) return null;
 
-                if (horses?.Count > 0 && horses.ContainsKey((uint)horse.net.ID.Value))
+                if (playerhorses?.Count > 0 && horses.Contains(horse.net.ID.Value))
                 {
                     DoLog($"Player {player.userID} wants to mount horse {horse.net.ID}");
                     if (IsFriend(player.userID, horse.OwnerID))
@@ -338,11 +377,11 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                if (horse.OwnerID == userid)
+                if (horse.OwnerID == userid && configData.Options.ShowWelcomeMessage)
                 {
                     Message(player.IPlayer, "yourhorse2");
                 }
-                else if (!horses.ContainsKey((uint)horse.net.ID.Value) && horse.OwnerID == 0)
+                else if (!horses.Contains(horse.net.ID.Value) && horse.OwnerID == 0)
                 {
                     ClaimHorse(horse, player);
                     DoLog($"Player {player.userID} mounted horse {horse.net.ID} and now owns it.");
@@ -359,9 +398,18 @@ namespace Oxide.Plugins
         {
             horse.OwnerID = player.userID;
 
-            uint horseid = (uint)horse.net.ID.Value;
+            ulong horseid = horse.net.ID.Value;
             horses.Remove(horseid);
-            horses.Add(horseid, player.userID);
+            if (!playerhorses.ContainsKey(player.userID))
+            {
+                playerhorses.Add(player.userID, new List<ulong>());
+            }
+            if (!playerhorses[player.userID].Contains(horseid))
+            {
+                playerhorses[player.userID].Add(horseid);
+            }
+            horses.Add(horseid);
+
             SaveData();
 
             if (configData.Options.EnableTimer)
@@ -413,21 +461,21 @@ namespace Oxide.Plugins
         {
             if (!iplayer.HasPermission(permFind_Use)) { Message(iplayer, "notauthorized"); return; }
             bool found = false;
-
-            foreach (KeyValuePair<ulong, ulong> h in horses)
+            BasePlayer player = iplayer.Object as BasePlayer;
+            if (!playerhorses.ContainsKey(player.userID))
             {
-                if (h.Value == Convert.ToUInt64(iplayer.Id))
-                {
-                    found = true;
-                    BasePlayer player = iplayer.Object as BasePlayer;
-                    BaseEntity entity = BaseNetworkable.serverEntities.Find(new NetworkableId(h.Key)) as BaseEntity;
+                playerhorses.Add(player.userID, new List<ulong>());
+            }
+            foreach (ulong h in playerhorses[player.userID])
+            {
+                found = true;
+                BaseEntity entity = BaseNetworkable.serverEntities.Find(new NetworkableId(h)) as BaseEntity;
 
-                    string hloc = PositionToGrid(entity.transform.position);
-                    string dist = Math.Round(Vector3.Distance(entity.transform.position, player.transform.position)).ToString();
-                    Message(iplayer, "foundhorse", dist, hloc);
+                string hloc = PositionToGrid(entity.transform.position);
+                string dist = Math.Round(Vector3.Distance(entity.transform.position, player.transform.position)).ToString();
+                Message(iplayer, "foundhorse", dist, hloc);
 
-                    break;
-                }
+                break;
             }
             if (!found) Message(iplayer, "nohorses");
         }
@@ -437,7 +485,8 @@ namespace Oxide.Plugins
         {
             if (!iplayer.HasPermission(permSpawn_Use)) { Message(iplayer, "notauthorized"); return; }
 
-            if (IsAtLimit(Convert.ToUInt64(iplayer.Id)))
+            BasePlayer player = iplayer.Object as BasePlayer;
+            if (IsAtLimit(player.userID))
             {
                 if (iplayer.HasPermission(permVIP))
                 {
@@ -450,7 +499,6 @@ namespace Oxide.Plugins
                 return;
             }
 
-            BasePlayer player = iplayer.Object as BasePlayer;
             const string staticprefab = "assets/rust.ai/nextai/testridablehorse.prefab";
 
             Vector3 spawnpos = player.eyes.position + (player.transform.forward * 2f);
@@ -501,7 +549,7 @@ namespace Oxide.Plugins
                 if (horse)
                 {
                     found = true;
-                    if (horse.OwnerID == player.userID && horses.ContainsKey((uint)horse.net.ID.Value))
+                    if (horse.OwnerID == player.userID && horses.Contains(horse.net.ID.Value))
                     {
                         string currentBreed = horse.GetBreed().breedName.translated;
                         Breeds breed;
@@ -538,7 +586,7 @@ namespace Oxide.Plugins
                 if (horse)
                 {
                     found = true;
-                    if (horse.OwnerID == player.userID && horses.ContainsKey((uint)horse.net.ID.Value))
+                    if (horse.OwnerID == player.userID && horses.Contains(horse.net.ID.Value))
                     {
                         horse.Hurt(500);
                     }
@@ -583,7 +631,7 @@ namespace Oxide.Plugins
                     {
                         Message(iplayer, "yourhorse");
                     }
-                    else if (!horses.ContainsKey((uint)horse.net.ID.Value) && horse.OwnerID == 0)
+                    else if (!horses.Contains(horse.net.ID.Value) && horse.OwnerID == 0)
                     {
                         ClaimHorse(horse, player);
                         break;
@@ -602,11 +650,34 @@ namespace Oxide.Plugins
         private void CmdRelease(IPlayer iplayer, string command, string[] args)
         {
             if (!iplayer.HasPermission(permClaim_Use)) { Message(iplayer, "notauthorized"); return; }
-
             BasePlayer player = iplayer.Object as BasePlayer;
+            bool found = false;
+
+            if (args.Length > 0 && args[0] == "all")
+            {
+                if (!playerhorses.ContainsKey(player.userID))
+                {
+                    playerhorses.Add(player.userID, new List<ulong>());
+                }
+                foreach (ulong horseid in new List<ulong>(playerhorses[player.userID]))
+                {
+                    RidableHorse horse = BaseNetworkable.serverEntities.Find(new NetworkableId(horseid)) as RidableHorse;
+                    if (horse != null)
+                    {
+                        found = true;
+                        horse.OwnerID = 0;
+                        playerhorses.Remove(horseid);
+                        horses.Remove(horseid);
+                        HandleTimer(horseid, player.userID);
+                        SaveData();
+                    }
+                }
+                if (found) Message(iplayer, "horsesreleased");
+                return;
+            }
+
             List<RidableHorse> hlist = new List<RidableHorse>();
             Vis.Entities(player.transform.position, 1f, hlist);
-            bool found = false;
             foreach (RidableHorse horse in hlist)
             {
                 if (horse)
@@ -615,7 +686,11 @@ namespace Oxide.Plugins
                     if (horse.OwnerID == player.userID)
                     {
                         horse.OwnerID = 0;
-                        uint horseid = (uint)horse.net.ID.Value;
+                        ulong horseid = horse.net.ID.Value;
+                        if (playerhorses.ContainsKey(player.userID))
+                        {
+                            playerhorses[player.userID].Remove(horseid);
+                        }
                         horses.Remove(horseid);
                         HandleTimer(horseid, horse.OwnerID);
                         SaveData();
@@ -700,20 +775,20 @@ namespace Oxide.Plugins
         private void PurgeInvalid()
         {
             bool found = false;
-            List<ulong> toremove = new List<ulong>();
-            foreach (ulong horse in horses.Keys)
+            foreach (KeyValuePair<ulong, List<ulong>> hl in new Dictionary<ulong, List<ulong>>(playerhorses))
             {
-                if (BaseNetworkable.serverEntities.Find(new NetworkableId((uint)horse)) == null)
+                found = false;
+                foreach (ulong horse in hl.Value)
                 {
-                    toremove.Add(horse);
-                    found = true;
+                    if (BaseNetworkable.serverEntities.Find(new NetworkableId(horse)) == null)
+                    {
+                        playerhorses[hl.Key].Remove(horse);
+                        horses.Remove(horse);
+                        found = true;
+                    }
                 }
+                if (found) SaveData();
             }
-            foreach (ulong horse in toremove)
-            {
-                horses.Remove(horse);
-            }
-            if (found) SaveData();
         }
 
         private bool IsAtLimit(ulong userid)
@@ -723,13 +798,14 @@ namespace Oxide.Plugins
             {
                 DoLog($"Checking horse limit for {userid}");
                 float amt = 0f;
-                foreach (KeyValuePair<ulong, ulong> horse in horses)
+                if (!playerhorses.ContainsKey(userid))
                 {
-                    if (horse.Value == userid)
-                    {
-                        DoLog($"Found matching userid {horse.Value}");
-                        amt++;
-                    }
+                    playerhorses.Add(userid, new List<ulong>());
+                }
+                foreach (ulong horse in playerhorses[userid])
+                {
+                    DoLog($"Found matching userid {horse}");
+                    amt++;
                 }
                 DoLog($"Player has {amt} horses");
                 if (amt > 0 && amt >= configData.Options.VIPLimit && permission.UserHasPermission(userid.ToString(), permVIP))
@@ -768,18 +844,18 @@ namespace Oxide.Plugins
 
                     try
                     {
-                        BaseNetworkable horse = BaseNetworkable.serverEntities.Find(new NetworkableId((uint)horseid));
-                        BasePlayer player = RustCore.FindPlayerByIdString(userid.ToString());
+                        BaseNetworkable horse = BaseNetworkable.serverEntities.Find(new NetworkableId(horseid));
+                        BasePlayer player = BasePlayer.FindAwakeOrSleeping(userid.ToString());
                         RidableHorse mounted = player.GetMounted().GetComponentInParent<RidableHorse>();
 
-                        if ((uint)mounted.net.ID.Value == horseid && configData.Options.ReleaseOwnerOnHorse)
+                        if (mounted.net.ID.Value == horseid && configData.Options.ReleaseOwnerOnHorse)
                         {
                             // Player is on this horse and we allow ownership to be removed while on the horse
                             mounted.OwnerID = 0;
-                            horses.Remove(horseid);
+                            playerhorses.Remove(horseid);
                             DoLog($"Released horse {horseid} owned by {userid}");
                         }
-                        else if ((uint)mounted.net.ID.Value == horseid && !configData.Options.ReleaseOwnerOnHorse)
+                        else if (mounted.net.ID.Value == horseid && !configData.Options.ReleaseOwnerOnHorse)
                         {
                             // Player is on this horse and we DO NOT allow ownership to be removed while on the horse
                             // Reset the timer...
@@ -791,17 +867,27 @@ namespace Oxide.Plugins
                         {
                             // Player is NOT mounted on this horse...
                             BaseEntity bhorse = horse as BaseEntity;
-                            bhorse.OwnerID = 0;
+                            BasePlayer pl = BasePlayer.FindAwakeOrSleeping(bhorse.OwnerID.ToString());
+                            if (pl != null)
+                            {
+                                playerhorses[pl.userID].Remove(horseid);
+                            }
                             horses.Remove(horseid);
+                            bhorse.OwnerID = 0;
                             DoLog($"Released horse {horseid} owned by {userid}");
                         }
                         SaveData();
                     }
                     catch
                     {
-                        BaseNetworkable horse = BaseNetworkable.serverEntities.Find(new NetworkableId((uint)horseid));
+                        BaseNetworkable horse = BaseNetworkable.serverEntities.Find(new NetworkableId(horseid));
                         BaseEntity bhorse = horse as BaseEntity;
                         bhorse.OwnerID = 0;
+                        BasePlayer pl = BasePlayer.FindAwakeOrSleeping(bhorse.OwnerID.ToString());
+                        if (pl != null)
+                        {
+                            playerhorses[pl.userID].Remove(horseid);
+                        }
                         horses.Remove(horseid);
                         SaveData();
                         DoLog($"Released horse {horseid} owned by {userid}");
@@ -872,6 +958,10 @@ namespace Oxide.Plugins
             {
                 configData.Options.SetHealthOnClaim = true;
             }
+            if (configData.Version < new VersionNumber(1, 0, 26))
+            {
+                do1026 = true;
+            }
 
             configData.Version = Version;
             SaveConfig(configData);
@@ -938,6 +1028,7 @@ namespace Oxide.Plugins
             public bool TCMustBeAuthorized;
             public bool AllowLeadByAnyone;
             public bool AllowChangingBreed;
+            public bool ShowWelcomeMessage;
             public float ReleaseTime;
             public float Limit;
             public float VIPLimit;

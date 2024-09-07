@@ -41,7 +41,7 @@ Limits may be set for standard and VIP users.
   "Version": {
     "Major": 1,
     "Minor": 0,
-    "Patch": 17
+    "Patch": 26
   }
 }
 ```
@@ -72,6 +72,7 @@ Limits may be set for standard and VIP users.
 
 - `/hclaim` - Claim the horse you're looking at (requires horses.claim permission).  If the horse is owned by the server, this should work.  However, this will not bypass the purchase routine at the stables.
 - `/hrelease` - Release ownership of the horse you're looking at (requires horses.claim permission).
+- `/hrelease all` - Release ownership of all of your owned horses (requires horses.claim permission).
 - `/hspawn` - Spawn a new horse in front of you (requires horses.spawn permission).
 - `/hremove` - Kill the horse in front of you (requires horses.spawn permission and ownership of the horse).  You may then enjoy some delicious horse meat.
 - `/hfind` - Show location of nearest owned horse
