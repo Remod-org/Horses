@@ -31,7 +31,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.26")]
+    [Info("Horses", "RFC1920", "1.0.27")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -190,6 +190,7 @@ namespace Oxide.Plugins
             DamageType majority = hitInfo.damageTypes.GetMajorityDamageType();
             if (horses.Contains(horse.net.ID.Value))
             {
+                if (horse.IsDead()) return null;
                 if (horse.InSafeZone()) return true;
 
                 if (majority == DamageType.Decay)
@@ -782,8 +783,8 @@ namespace Oxide.Plugins
                 {
                     if (BaseNetworkable.serverEntities.Find(new NetworkableId(horse)) == null)
                     {
-                        playerhorses[hl.Key].Remove(horse);
-                        horses.Remove(horse);
+                        playerhorses[hl.Key]?.Remove(horse);
+                        horses?.Remove(horse);
                         found = true;
                     }
                 }
