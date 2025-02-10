@@ -30,7 +30,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.28")]
+    [Info("Horses", "RFC1920", "1.0.29")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -500,7 +500,8 @@ namespace Oxide.Plugins
                 return;
             }
 
-            const string staticprefab = "assets/rust.ai/nextai/testridablehorse.prefab";
+            //const string staticprefab = "assets/rust.ai/nextai/testridablehorse.prefab";
+            const string staticprefab = "assets/content/vehicles/horse/ridablehorse2.prefab";
 
             Vector3 spawnpos = player.eyes.position + (player.transform.forward * 2f);
             spawnpos.y = TerrainMeta.HeightMap.GetHeight(spawnpos);
