@@ -30,7 +30,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.29")]
+    [Info("Horses", "RFC1920", "1.0.30")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -41,11 +41,11 @@ namespace Oxide.Plugins
         private readonly Plugin Friends, Clans, GridAPI;
 
         // Permanent data for player-owned horses
-        private static Dictionary<ulong, List<ulong>> playerhorses = new Dictionary<ulong, List<ulong>>();
+        private static Dictionary<ulong, List<ulong>> playerhorses = new();
         // Runtime simple list of horses
-        private static List<ulong> horses = new List<ulong>();
+        private static List<ulong> horses = new();
 
-        private static Dictionary<ulong, HTimer> htimer = new Dictionary<ulong, HTimer>();
+        private static Dictionary<ulong, HTimer> htimer = new();
         private const string permClaim_Use = "horses.claim";
         private const string permSpawn_Use = "horses.spawn";
         private const string permBreed_Use = "horses.breed";
@@ -146,7 +146,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permVIP, this);
 
             // Fix ownership for horses perhaps previously claimed but not current managed.
-            foreach (RidableHorse2 horse in UnityEngine.Object.FindObjectsOfType<RidableHorse2>())
+            foreach (RidableHorse horse in UnityEngine.Object.FindObjectsOfType<RidableHorse>())
             {
                 if (!horses.Contains(horse.net.ID.Value) && horse.OwnerID != 0)
                 {
@@ -181,7 +181,7 @@ namespace Oxide.Plugins
             SaveData();
         }
 
-        private object OnEntityTakeDamage(RidableHorse2 horse, HitInfo hitInfo)
+        private object OnEntityTakeDamage(RidableHorse horse, HitInfo hitInfo)
         {
             if (!enabled) return null;
             if (horse == null) return null;
@@ -205,8 +205,7 @@ namespace Oxide.Plugins
                 {
                     // Horse visibly and audibly alerts
                     DoLog("Trying to alert!");
-                    InputMessage message = new InputMessage() { buttons = 64 };
-                    horse.PlayerServerInput(new InputState() { current = message }, null);
+                    horse.PlayerServerInput(new InputState() { current = new InputMessage() { buttons = 64 } }, null);
                 }
 
                 if (!configData.Options.AllowDamage)
@@ -246,7 +245,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        private void OnEntityDeath(RidableHorse2 entity, HitInfo info)
+        private void OnEntityDeath(RidableHorse entity, HitInfo info)
         {
             if (!enabled) return;
             if (entity == null) return;
@@ -263,7 +262,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private object CanLootEntity(BasePlayer player, RidableHorse2 horse)
+        private object CanLootEntity(BasePlayer player, RidableHorse horse)
         {
             if (!enabled) return null;
             if (!configData.Options.RestrictStorage) return null;
@@ -300,7 +299,7 @@ namespace Oxide.Plugins
         //    return null;
         //}
 
-        private object OnHorseLead(RidableHorse2 horse, BasePlayer player)
+        private object OnHorseLead(RidableHorse horse, BasePlayer player)
         {
             if (!enabled) return null;
             DoLog("Horse lead");
@@ -329,7 +328,7 @@ namespace Oxide.Plugins
             if (player == null) return null;
             if (mountable == null) return null;
 
-            RidableHorse2 horse = mountable.GetComponentInParent<RidableHorse2>();
+            RidableHorse horse = mountable.GetComponentInParent<RidableHorse>();
             if (horse != null)
             {
                 if (horse?.OwnerID == 0) return null;
@@ -359,7 +358,7 @@ namespace Oxide.Plugins
             if (mountable == null) return;
             if (!configData.Options.SetOwnerOnFirstMount) return;
 
-            RidableHorse2 horse = mountable.GetComponentInParent<RidableHorse2>();
+            RidableHorse horse = mountable.GetComponentInParent<RidableHorse>();
 
             if (horse != null)
             {
@@ -394,7 +393,7 @@ namespace Oxide.Plugins
         }
         #endregion
 
-        public void ClaimHorse(RidableHorse2 horse, BasePlayer player)
+        public void ClaimHorse(RidableHorse horse, BasePlayer player)
         {
             horse.OwnerID = player.userID;
 
@@ -420,7 +419,10 @@ namespace Oxide.Plugins
             if (!configData.Options.AllowDecay)
             {
                 DecayEntity x = horse.gameObject.GetComponent<DecayEntity>();
-                x.enabled = false;
+                if (x != null)
+                {
+                    x.enabled = false;
+                }
             }
             if (configData.Options.SetHealthOnClaim)
             {
@@ -428,7 +430,8 @@ namespace Oxide.Plugins
                 horse.ReplenishStamina(30);
             }
 
-            Message(player.IPlayer, "horseclaimed");
+            //Message(player.IPlayer, "horseclaimed");
+            SendReply(player, Lang("horseclaimed"));
         }
 
         #region commands
@@ -438,9 +441,9 @@ namespace Oxide.Plugins
             if (!iplayer.HasPermission(permClaim_Use)) { Message(iplayer, "notauthorized"); return; }
 
             BasePlayer player = iplayer.Object as BasePlayer;
-            List<RidableHorse2> hlist = new List<RidableHorse2>();
+            List<RidableHorse> hlist = new();
             Vis.Entities(player.transform.position, 1f, hlist);
-            foreach (RidableHorse2 horse in hlist)
+            foreach (RidableHorse horse in hlist)
             {
                 if (horse != null)
                 {
@@ -542,11 +545,11 @@ namespace Oxide.Plugins
             }
             if (args.Length != 1) return;
 
-            List<RidableHorse2> hlist = new List<RidableHorse2>();
+            List<RidableHorse> hlist = new();
             BasePlayer player = iplayer.Object as BasePlayer;
             Vis.Entities(player.transform.position, 1f, hlist);
             bool found = false;
-            foreach (RidableHorse2 horse in hlist)
+            foreach (RidableHorse horse in hlist)
             {
                 if (horse)
                 {
@@ -579,11 +582,11 @@ namespace Oxide.Plugins
         {
             if (!iplayer.HasPermission(permSpawn_Use)) { Message(iplayer, "notauthorized"); return; }
 
-            List<RidableHorse2> hlist = new List<RidableHorse2>();
+            List<RidableHorse> hlist = new();
             BasePlayer player = iplayer.Object as BasePlayer;
             Vis.Entities(player.transform.position, 1f, hlist);
             bool found = false;
-            foreach (RidableHorse2 horse in hlist)
+            foreach (RidableHorse horse in hlist)
             {
                 if (horse)
                 {
@@ -607,10 +610,10 @@ namespace Oxide.Plugins
             if (!iplayer.HasPermission(permClaim_Use)) { Message(iplayer, "notauthorized"); return; }
 
             BasePlayer player = iplayer.Object as BasePlayer;
-            List<RidableHorse2> hlist = new List<RidableHorse2>();
+            List<RidableHorse> hlist = new();
             Vis.Entities(player.transform.position, 1f, hlist);
             bool found = false;
-            foreach (RidableHorse2 horse in hlist)
+            foreach (RidableHorse horse in hlist)
             {
                 if (horse)
                 {
@@ -663,7 +666,7 @@ namespace Oxide.Plugins
                 }
                 foreach (ulong horseid in new List<ulong>(playerhorses[player.userID]))
                 {
-                    RidableHorse2 horse = BaseNetworkable.serverEntities.Find(new NetworkableId(horseid)) as RidableHorse2;
+                    RidableHorse horse = BaseNetworkable.serverEntities.Find(new NetworkableId(horseid)) as RidableHorse;
                     if (horse != null)
                     {
                         found = true;
@@ -678,9 +681,9 @@ namespace Oxide.Plugins
                 return;
             }
 
-            List<RidableHorse2> hlist = new List<RidableHorse2>();
+            List<RidableHorse> hlist = new();
             Vis.Entities(player.transform.position, 1f, hlist);
-            foreach (RidableHorse2 horse in hlist)
+            foreach (RidableHorse horse in hlist)
             {
                 if (horse)
                 {
@@ -713,7 +716,7 @@ namespace Oxide.Plugins
         [HookMethod("SendHelpText")]
         private void SendHelpText(BasePlayer player)
         {
-            StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new();
             sb.Append("<color=#05eb59>").Append(Name).Append(' ').Append(Version).Append(" - ").Append(Description).Append("</color>\n");
             if (player.IPlayer.HasPermission(permClaim_Use))
             {
@@ -761,7 +764,7 @@ namespace Oxide.Plugins
             else
             {
                 // From GrTeleport
-                Vector2 r = new Vector2((World.Size / 2) + position.x, (World.Size / 2) + position.z);
+                Vector2 r = new((World.Size / 2) + position.x, (World.Size / 2) + position.z);
                 float x = Mathf.Floor(r.x / 146.3f) % 26;
                 float z = Mathf.Floor(World.Size / 146.3f) - Mathf.Floor(r.y / 146.3f);
 
@@ -848,7 +851,7 @@ namespace Oxide.Plugins
                     {
                         BaseNetworkable horse = BaseNetworkable.serverEntities.Find(new NetworkableId(horseid));
                         BasePlayer player = BasePlayer.FindAwakeOrSleeping(userid.ToString());
-                        RidableHorse2 mounted = player.GetMounted().GetComponentInParent<RidableHorse2>();
+                        RidableHorse mounted = player.GetMounted().GetComponentInParent<RidableHorse>();
 
                         if (mounted.net.ID.Value == horseid && configData.Options.ReleaseOwnerOnHorse)
                         {
@@ -972,7 +975,7 @@ namespace Oxide.Plugins
         protected override void LoadDefaultConfig()
         {
             Puts("Creating new config file.");
-            ConfigData config = new ConfigData
+            ConfigData config = new()
             {
                 Options = new Options()
                 {
