@@ -30,7 +30,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.31")]
+    [Info("Horses", "RFC1920", "1.0.32")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -38,7 +38,8 @@ namespace Oxide.Plugins
         private ConfigData configData;
 
         [PluginReference]
-        private readonly Plugin Friends, Clans, GridAPI;
+        private readonly Plugin Friends, Clans, GridAPI, SteamFriends;
+        public static Horses Instance;
 
         // Permanent data for player-owned horses
         private static Dictionary<ulong, List<ulong>> playerhorses = new();
@@ -131,6 +132,7 @@ namespace Oxide.Plugins
             LoadConfigVariables();
             LoadData();
             enabled = true;
+            Instance = this;
 
             AddCovalenceCommand("hclaim", "CmdClaim");
             AddCovalenceCommand("hrelease", "CmdRelease");
@@ -429,6 +431,8 @@ namespace Oxide.Plugins
                 horse.SetHealth(440);
                 horse.ReplenishStamina(30);
             }
+            //Homing home = horse.gameObject.GetOrAddComponent<Homing>();
+            //home.dohoming = true;
 
             //Message(player.IPlayer, "horseclaimed");
             SendReply(player, Lang("horseclaimed"));
@@ -929,6 +933,15 @@ namespace Oxide.Plugins
                     return true;
                 }
             }
+            if (configData.Options.useSteam && SteamFriends != null)
+            {
+                List<string> steamFriends = (List<string>)SteamFriends?.CallHook("GetFriends", playerid);
+                if (steamFriends.Contains(playerid.ToString()))
+                {
+                    DoLog($"Steam reports that {playerid} and {ownerid} are Steam friends.");
+                    return true;
+                }
+            }
             return false;
         }
 
@@ -981,6 +994,7 @@ namespace Oxide.Plugins
                 {
                     useClans = false,
                     useFriends = false,
+                    useSteam = false,
                     useTeams = false,
                     debug = false,
                     SetOwnerOnFirstMount = true,
@@ -1018,6 +1032,7 @@ namespace Oxide.Plugins
         {
             public bool useClans;
             public bool useFriends;
+            public bool useSteam;
             public bool useTeams;
             public bool debug;
             public bool SetOwnerOnFirstMount;
@@ -1046,6 +1061,48 @@ namespace Oxide.Plugins
             public float start;
             public float countdown;
             public ulong userid;
+        }
+        #endregion
+
+        #region Future
+        public class Homing : FacepunchBehaviour
+        {
+            public RidableHorse horse;
+            public BasePlayer player;
+
+            public bool dohoming;
+
+            public void Awake()
+            {
+                horse = GetComponentInParent<RidableHorse>();
+                Instance.Puts($"Horse: {horse?.net.ID.Value}");
+                player = BasePlayer.Find(horse?.OwnerID.ToString());
+                Instance.Puts($"Player: {player?.UserIDString}");
+            }
+
+            public void FixedUpdate()
+            {
+                if (!dohoming) return;
+                if (horse?.OwnerID == 0) return;
+                if (player == null) return;
+                if (Vector3.Distance(horse.transform.position, player.transform.position) > 5f)
+                {
+                    if (!horse.IsLeading)
+                    {
+                        Instance.DoLog($"Start leading of {horse.net.ID.Value} by {player?.userID}");
+                        horse.SetLeading(player);
+                        //BaseEntity.RPCMessage rPCMessage = new()
+                        //{
+                        //    connection = player.net.connection,
+                        //    player = player,
+                        //    read = new Network.NetRead()
+                        //};
+                        //horse.SERVER_Lead(rPCMessage);
+                    }
+                    return;
+                }
+                horse.SetLeading(null);
+            }
         }
         #endregion
     }

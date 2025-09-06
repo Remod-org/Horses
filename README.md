@@ -18,6 +18,7 @@ Limits may be set for standard and VIP users.
 {
   "Options": {
     "useClans": false,
+    "useSteam": false,
     "useFriends": false,
     "useTeams": false,
     "debug": false,
@@ -41,12 +42,12 @@ Limits may be set for standard and VIP users.
   "Version": {
     "Major": 1,
     "Minor": 0,
-    "Patch": 26
+    "Patch": 32
   }
 }
 ```
 
-- `useClans/useFriends/useTeams` -- Use Friends, Clans, or Rust teams to determine accessibility of an owned horse.  This allows friends to share horses.
+- `useSteam/useClans/useFriends/useTeams` -- Use Steam friends, Friends, Clans, or Rust teams to determine accessibility of an owned horse.  This allows friends to share horses.  Steam friends requires our SteamFriends library plugin (at github)
 - `SetOwnerOnFirstMount` -- Sets ownership of an unowned horse on mount.
 - `EnableTimer` -- Enable timed release of horse ownership after the time specified by ReleaseTime.
 - `ReleaseTime` -- Sets the time IN SECONDS to maintain horse ownership if EnableTimer is true.  Must be a numerical value.
