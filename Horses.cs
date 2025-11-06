@@ -24,13 +24,12 @@ using Oxide.Core.Plugins;
 using Rust;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.32")]
+    [Info("Horses", "RFC1920", "1.0.33")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -225,7 +224,7 @@ namespace Oxide.Plugins
                         {
                             // Verify horse owner is registered to the TC
                             //foreach (ProtoBuf.PlayerNameID p in tc.authorizedPlayers)
-                            foreach (ulong auth in tc.authorizedPlayers.Select(x => x.userid).ToArray())
+                            foreach (ulong auth in tc.authorizedPlayers)
                             {
                                 if (auth == horse.OwnerID)
                                 {
