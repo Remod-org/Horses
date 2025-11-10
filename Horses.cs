@@ -29,7 +29,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.33")]
+    [Info("Horses", "RFC1920", "1.0.34")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -782,19 +782,22 @@ namespace Oxide.Plugins
 
         private void PurgeInvalid()
         {
-            bool found = false;
             foreach (KeyValuePair<ulong, List<ulong>> hl in new Dictionary<ulong, List<ulong>>(playerhorses))
             {
-                found = false;
-                foreach (ulong horse in hl.Value)
+                bool found = false;
+                try
                 {
-                    if (BaseNetworkable.serverEntities.Find(new NetworkableId(horse)) == null)
+                    foreach (ulong horse in hl.Value)
                     {
-                        playerhorses[hl.Key]?.Remove(horse);
-                        horses?.Remove(horse);
-                        found = true;
+                        if (BaseNetworkable.serverEntities.Find(new NetworkableId(horse)) == null)
+                        {
+                            playerhorses[hl.Key]?.Remove(horse);
+                            horses?.Remove(horse);
+                            found = true;
+                        }
                     }
                 }
+                catch { }
                 if (found) SaveData();
             }
         }
