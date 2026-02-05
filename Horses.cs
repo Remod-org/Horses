@@ -29,7 +29,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.34")]
+    [Info("Horses", "RFC1920", "1.0.35")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -560,8 +560,7 @@ namespace Oxide.Plugins
                     if (horse.OwnerID == player.userID && horses.Contains(horse.net.ID.Value))
                     {
                         string currentBreed = horse.GetBreed().breedName.translated;
-                        Breeds breed;
-                        bool foundBreed = Enum.TryParse(args[0], true, out breed);
+                        bool foundBreed = Enum.TryParse(args[0], true, out Breeds breed);
                         if (foundBreed)
                         {
                             horse.ApplyBreed((int)breed);
@@ -782,22 +781,25 @@ namespace Oxide.Plugins
 
         private void PurgeInvalid()
         {
-            foreach (KeyValuePair<ulong, List<ulong>> hl in new Dictionary<ulong, List<ulong>>(playerhorses))
+            Dictionary<ulong, ulong> toremove = new();
+            foreach (KeyValuePair<ulong, List<ulong>> hl in playerhorses)
             {
                 bool found = false;
-                try
+                foreach (ulong horse in hl.Value)
                 {
-                    foreach (ulong horse in hl.Value)
+                    if (BaseNetworkable.serverEntities.Find(new NetworkableId(horse)) == null)
                     {
-                        if (BaseNetworkable.serverEntities.Find(new NetworkableId(horse)) == null)
-                        {
-                            playerhorses[hl.Key]?.Remove(horse);
-                            horses?.Remove(horse);
-                            found = true;
-                        }
+                        //playerhorses[hl.Key]?.Remove(horse);
+                        toremove.Add(hl.Key, horse);
+                        horses?.Remove(horse);
+                        found = true;
                     }
                 }
-                catch { }
+                foreach (KeyValuePair<ulong, ulong> h2 in toremove)
+                {
+                    playerhorses[h2.Key].Remove(h2.Value);
+                }
+                toremove.Clear();
                 if (found) SaveData();
             }
         }
