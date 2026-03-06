@@ -29,7 +29,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.35")]
+    [Info("Horses", "RFC1920", "1.0.36")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -377,9 +377,11 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                if (horse.OwnerID == userid && configData.Options.ShowWelcomeMessage)
+                DoLog($"Player userid = {userid}.  Horse ownerid = {horse.OwnerID}");
+                if (horse.OwnerID == userid)
                 {
-                    Message(player.IPlayer, "yourhorse2");
+                    if (configData.Options.ShowWelcomeMessage) Message(player.IPlayer, "yourhorse2");
+                    return;
                 }
                 else if (!horses.Contains(horse.net.ID.Value) && horse.OwnerID == 0)
                 {
