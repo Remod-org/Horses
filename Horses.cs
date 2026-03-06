@@ -29,7 +29,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.36")]
+    [Info("Horses", "RFC1920", "1.0.37")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -621,6 +621,7 @@ namespace Oxide.Plugins
             {
                 if (horse)
                 {
+                    if (horse.IsForSale) return; // Don't allow claiming horses at the stables...
                     found = true;
                     ulong userid = player.userID;
                     if (IsAtLimit(userid))
