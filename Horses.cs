@@ -24,12 +24,13 @@ using Oxide.Core.Plugins;
 using Rust;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.37")]
+    [Info("Horses", "RFC1920", "1.0.38")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -471,6 +472,7 @@ namespace Oxide.Plugins
             if (!iplayer.HasPermission(permFind_Use)) { Message(iplayer, "notauthorized"); return; }
             bool found = false;
             BasePlayer player = iplayer.Object as BasePlayer;
+            if (!playerhorses.Any()) return;
             if (!playerhorses.ContainsKey(player.userID))
             {
                 playerhorses.Add(player.userID, new List<ulong>());
@@ -480,10 +482,12 @@ namespace Oxide.Plugins
                 found = true;
                 BaseEntity entity = BaseNetworkable.serverEntities.Find(new NetworkableId(h)) as BaseEntity;
 
-                string hloc = PositionToGrid(entity.transform.position);
-                string dist = Math.Round(Vector3.Distance(entity.transform.position, player.transform.position)).ToString();
-                Message(iplayer, "foundhorse", dist, hloc);
-
+                if (entity != null)
+                {
+                    string hloc = PositionToGrid(entity.transform.position);
+                    string dist = Math.Round(Vector3.Distance(entity.transform.position, player.transform.position)).ToString();
+                    Message(iplayer, "foundhorse", dist, hloc);
+                }
                 break;
             }
             if (!found) Message(iplayer, "nohorses");
