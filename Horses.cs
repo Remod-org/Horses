@@ -30,7 +30,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Horses", "RFC1920", "1.0.38")]
+    [Info("Horses", "RFC1920", "1.0.39")]
     [Description("Manage horse ownership and access")]
 
     internal class Horses : RustPlugin
@@ -411,7 +411,7 @@ namespace Oxide.Plugins
             {
                 playerhorses[player.userID].Add(horseid);
             }
-            horses.Add(horseid);
+            if (!horses.Contains(horseid)) horses.Add(horseid);
 
             SaveData();
 
@@ -797,7 +797,7 @@ namespace Oxide.Plugins
                     if (BaseNetworkable.serverEntities.Find(new NetworkableId(horse)) == null)
                     {
                         //playerhorses[hl.Key]?.Remove(horse);
-                        toremove.Add(hl.Key, horse);
+                        if (!toremove.ContainsKey(hl.Key)) toremove.Add(hl.Key, horse);
                         horses?.Remove(horse);
                         found = true;
                     }
